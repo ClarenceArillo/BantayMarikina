@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "Bantay Marikina",
+    "slug": "bantay-marikina",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/Logo/BantayMarikinaLogo.png",
+    "scheme": "bantay-marikina",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f7faf8",
+        "foregroundImage": "./assets/Logo/BantayMarikinaLogo.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/Logo/BantayMarikinaLogo.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/Logo/BantayMarikinaLogo.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#f7faf8",
+          "dark": {
+            "backgroundColor": "#f7faf8"
+          }
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}
