@@ -3,22 +3,37 @@ import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-na
 import { Colors } from '@/constants/theme';
 
 type AuthFieldProps = TextInputProps & {
+  error?: string;
   label: string;
+  required?: boolean;
   rightElement?: React.ReactNode;
 };
 
-export function AuthField({ label, rightElement, style, ...inputProps }: AuthFieldProps) {
+export function AuthField({
+  error,
+  label,
+  required = false,
+  rightElement,
+  style,
+  ...inputProps
+}: AuthFieldProps) {
   return (
     <View style={styles.group}>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.inputWrap}>
+      <View style={[styles.inputWrap, error ? styles.inputWrapError : undefined]}>
         <TextInput
           placeholderTextColor={Colors.light.placeholder}
-          style={[styles.input, rightElement ? styles.inputWithIcon : undefined, style]}
+          style={[
+            styles.input,
+            rightElement || required ? styles.inputWithIcon : undefined,
+            style,
+          ]}
           {...inputProps}
         />
+        {required ? <Text style={styles.requiredMark}>*</Text> : null}
         {rightElement ? <View style={styles.rightElement}>{rightElement}</View> : null}
       </View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
     </View>
   );
 }
@@ -41,6 +56,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: Colors.light.input,
   },
+  inputWrapError: {
+    borderColor: '#d53939',
+    borderWidth: 1,
+  },
   input: {
     height: '100%',
     paddingHorizontal: 13,
@@ -55,5 +74,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 13,
     alignSelf: 'center',
+  },
+  requiredMark: {
+    color: '#d53939',
+    fontSize: 18,
+    fontWeight: '700',
+    position: 'absolute',
+    right: 13,
+    top: 9,
+  },
+  errorText: {
+    color: '#d53939',
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: -3,
   },
 });

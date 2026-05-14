@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AuthButton } from '@/components/auth-button';
 import { AuthField } from '@/components/auth-field';
+import { AuthStatusModal } from '@/components/auth-modal';
 import { AuthScreen } from '@/components/auth-screen';
 import { Colors } from '@/constants/theme';
 import { useSignupDraft } from '@/context/signup-context';
@@ -12,21 +13,35 @@ import { registerUser } from '@/services/authService';
 export default function SignupSecurityScreen() {
   const [agreed, setAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [modal, setModal] = useState<{
+    message?: string;
+    status: 'success' | 'error';
+    title: string;
+  } | null>(null);
   const { draft, resetDraft, updateDraft } = useSignupDraft();
 
+  const isComplete = Boolean(
+    draft.username.trim() && draft.password && draft.confirm_password && agreed
+  );
+
+  const requiredError = (value?: string) => (value?.trim() ? undefined : 'Required');
+
   const handleSignup = async () => {
-    if (!draft.username.trim() || !draft.password || !draft.confirm_password) {
-      Alert.alert('Missing details', 'Please enter a username and password.');
+    if (!isComplete) {
+      setModal({
+        status: 'error',
+        title: 'Sign Up Failed',
+        message: 'Please complete the required fields and agree to the terms.',
+      });
       return;
     }
 
     if (draft.password !== draft.confirm_password) {
-      Alert.alert('Password mismatch', 'Please make sure both passwords match.');
-      return;
-    }
-
-    if (!agreed) {
-      Alert.alert('Terms required', 'Please agree to the terms and conditions to continue.');
+      setModal({
+        status: 'error',
+        title: 'Password Mismatch',
+        message: 'Please make sure both passwords match.',
+      });
       return;
     }
 
@@ -46,14 +61,31 @@ export default function SignupSecurityScreen() {
         house_number: draft.house_number?.trim(),
         username: draft.username.trim(),
       });
-      resetDraft();
-      Alert.alert('Account created', 'You can now log in with your email and password.');
-      router.replace('/');
+      setModal({
+        status: 'success',
+        title: 'Successful',
+        message: 'Your account has been created.',
+      });
     } catch (error) {
-      Alert.alert('Sign up failed', error instanceof Error ? error.message : 'Please try again.');
+      setModal({
+        status: 'error',
+        title: 'Sign Up Failed',
+        message: error instanceof Error ? error.message : 'Please try again.',
+      });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleModalClose = () => {
+    if (modal?.status === 'success') {
+      setModal(null);
+      resetDraft();
+      router.replace('/');
+      return;
+    }
+
+    setModal(null);
   };
 
   return (
@@ -61,24 +93,30 @@ export default function SignupSecurityScreen() {
       <View style={styles.form}>
         <AuthField
           autoCapitalize="none"
+          error={requiredError(draft.username)}
           label="Create Username"
           onChangeText={(username) => updateDraft({ username })}
           placeholder="@delacruzjuan1"
+          required
           textContentType="username"
           value={draft.username}
         />
         <AuthField
+          error={requiredError(draft.password)}
           label="Create Password"
           onChangeText={(password) => updateDraft({ password })}
           placeholder="********"
+          required
           secureTextEntry
           textContentType="newPassword"
           value={draft.password}
         />
         <AuthField
+          error={requiredError(draft.confirm_password)}
           label="Confirm Password"
           onChangeText={(confirm_password) => updateDraft({ confirm_password })}
           placeholder="********"
+          required
           secureTextEntry
           textContentType="newPassword"
           value={draft.confirm_password}
@@ -95,12 +133,21 @@ export default function SignupSecurityScreen() {
       <View style={styles.actions}>
         <AuthButton title="Previous" variant="text" onPress={() => router.back()} />
         <AuthButton
-          disabled={isSubmitting}
+          disabled={isSubmitting || !isComplete}
           title={isSubmitting ? 'Saving...' : 'Continue'}
           style={styles.continueButton}
           onPress={handleSignup}
         />
       </View>
+
+      <AuthStatusModal
+        buttonTitle={modal?.status === 'success' ? 'Proceed to Log In' : 'Try Again'}
+        message={modal?.message}
+        onClose={handleModalClose}
+        status={modal?.status ?? 'success'}
+        title={modal?.title ?? ''}
+        visible={Boolean(modal)}
+      />
     </AuthScreen>
   );
 }

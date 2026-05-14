@@ -1,36 +1,74 @@
 import { Link, router } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AuthButton } from '@/components/auth-button';
 import { AuthField } from '@/components/auth-field';
+import { AuthStatusModal } from '@/components/auth-modal';
 import { AuthScreen } from '@/components/auth-screen';
 import { Colors } from '@/constants/theme';
-import { loginUser } from '@/services/authService';
+import { LoginResponse, loginUser } from '@/services/authService';
 
 export default function LoginScreen() {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [modal, setModal] = useState<{
+    message?: string;
+    status: 'success' | 'error';
+    title: string;
+  } | null>(null);
+  const [loggedInUser, setLoggedInUser] = useState<LoginResponse | null>(null);
 
   const handleLogin = async () => {
     const cleanIdentifier = identifier.trim();
 
     if (!cleanIdentifier || !password) {
-      Alert.alert('Missing details', 'Please enter your email or username and password.');
+      setModal({
+        status: 'error',
+        title: 'Login Failed',
+        message: 'Please enter your email or username and password.',
+      });
       return;
     }
 
     try {
       setIsSubmitting(true);
       const user = await loginUser(cleanIdentifier, password);
-      Alert.alert('Login successful', `Welcome back, ${user.full_name}.`);
+      setLoggedInUser(user);
+      setModal({
+        status: 'success',
+        title: 'Successful',
+        message: 'Login successful.',
+      });
     } catch (error) {
-      Alert.alert('Login failed', error instanceof Error ? error.message : 'Please try again.');
+      setModal({
+        status: 'error',
+        title: 'Login Failed',
+        message: error instanceof Error ? error.message : 'Please try again.',
+      });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleModalClose = () => {
+    if (modal?.status === 'success' && loggedInUser) {
+      const user = loggedInUser;
+      setModal(null);
+      setLoggedInUser(null);
+      router.replace({
+        pathname: '/home',
+        params: {
+          fullName: user.full_name,
+          barangay: user.barangay ?? user.profile?.address?.barangay ?? '',
+        },
+      });
+      return;
+    }
+
+    setModal(null);
   };
 
   return (
@@ -74,6 +112,15 @@ export default function LoginScreen() {
           <Text style={styles.signupLink}>SIGN UP</Text>
         </Pressable>
       </View>
+
+      <AuthStatusModal
+        buttonTitle={modal?.status === 'success' ? 'Proceed' : 'Try Again'}
+        message={modal?.message}
+        onClose={handleModalClose}
+        status={modal?.status ?? 'success'}
+        title={modal?.title ?? ''}
+        visible={Boolean(modal)}
+      />
     </AuthScreen>
   );
 }

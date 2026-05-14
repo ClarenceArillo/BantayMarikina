@@ -11,6 +11,7 @@ export default function RootLayout() {
           headerShown: false,
         }}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="home" />
         <Stack.Screen name="forgot-password" />
         <Stack.Screen name="signup/index" />
         <Stack.Screen name="signup/address" />

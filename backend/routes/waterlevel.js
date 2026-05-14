@@ -10,19 +10,21 @@ function parseLevel(wl) {
 }
 
 function getStatus(level, alertwl, alarmwl, criticalwl) {
-  if (!level) return 'Unavailable';
+  if (level === null || level === undefined) return 'Unavailable';
   if (criticalwl && level >= parseFloat(criticalwl)) return 'Critical';
   if (alarmwl && level >= parseFloat(alarmwl)) return 'Warning';
   if (alertwl && level >= parseFloat(alertwl)) return 'Warning';
   return 'Normal';
 }
 
-// Map dashboard names to PAGASA names
+// Map dashboard labels to PAGASA station names.
 const STATION_MAP = {
-  'Sto Niño':  'Sto Nino',
-  'Tumana':    'Tumana Bridge',
-  'Nangka':    'Nangka',
-  'Rodriguez': 'Rodriguez',
+  'Sto Nino': 'Sto Nino',
+  Tumana: 'Tumana Bridge',
+  Nangka: 'Nangka',
+  Montalban: 'Montalban',
+  Rodriguez: 'Rodriguez',
+  Burgos: 'Burgos',
 };
 
 router.get('/', async (req, res) => {
@@ -32,18 +34,18 @@ router.get('/', async (req, res) => {
       {
         params: { _: Date.now() },
         headers: {
-          'accept': 'application/json, text/javascript, */*; q=0.01',
-          'isajax': 'true',
+          accept: 'application/json, text/javascript, */*; q=0.01',
+          isajax: 'true',
           'x-requested-with': 'XMLHttpRequest',
-          'referer': 'https://pasig-marikina-tullahanffws.pagasa.dost.gov.ph/',
+          referer: 'https://pasig-marikina-tullahanffws.pagasa.dost.gov.ph/',
         },
       }
     );
 
-    const rawData = response.data;
+    const rawData = Array.isArray(response.data) ? response.data : response.data.value || [];
 
     const stations = Object.entries(STATION_MAP).map(([displayName, pagasaName]) => {
-      const match = rawData.find(d => d.obsnm === pagasaName);
+      const match = rawData.find((d) => d.obsnm === pagasaName);
       const level = match ? parseLevel(match.wl) : null;
       const status = match
         ? getStatus(level, match.alertwl, match.alarmwl, match.criticalwl)

@@ -5,7 +5,7 @@ const localBaseUrl = Platform.select({
   default: 'http://localhost:3000/api',
 });
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? localBaseUrl ?? 'http://localhost:3000/api';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? localBaseUrl ?? 'http://localhost:3000/api';
 
 export type RegisterPayload = {
   first_name: string;
