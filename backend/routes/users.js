@@ -3,10 +3,26 @@ const router = express.Router();
 const { db, admin } = require('../firebase');
 const axios = require('axios');
 
-const firebaseApiKey = process.env.FIREBASE_WEB_API_KEY;
-
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
+}
+
+function normalizeUsername(username) {
+  return String(username || '').trim();
+}
+
+function normalizeUsernameKey(username) {
+  return normalizeUsername(username).toLowerCase();
+}
+
+function getFirebaseApiKey() {
+  const apiKey = process.env.FIREBASE_WEB_API_KEY;
+
+  if (!apiKey || apiKey === 'your_firebase_web_api_key') {
+    return null;
+  }
+
+  return apiKey;
 }
 
 function getAuthErrorMessage(error) {
@@ -31,6 +47,43 @@ function getAuthErrorMessage(error) {
   return firebaseMessage || error.message || 'Authentication failed';
 }
 
+async function findUserByUsername(username) {
+  const usernameLower = normalizeUsernameKey(username);
+
+  if (!usernameLower) {
+    return null;
+  }
+
+  let snapshot = await db.collection('Users')
+    .where('username_lower', '==', usernameLower)
+    .limit(1)
+    .get();
+
+  if (snapshot.empty) {
+    snapshot = await db.collection('Users')
+      .where('username', '==', normalizeUsername(username))
+      .limit(1)
+      .get();
+  }
+
+  return snapshot.empty ? null : snapshot.docs[0];
+}
+
+async function resolveLoginEmail(identifier) {
+  const cleanIdentifier = String(identifier || '').trim();
+
+  if (!cleanIdentifier) {
+    return null;
+  }
+
+  if (cleanIdentifier.includes('@')) {
+    return normalizeEmail(cleanIdentifier);
+  }
+
+  const userDoc = await findUserByUsername(cleanIdentifier);
+  return userDoc?.data().email || null;
+}
+
 // Register
 router.post('/register', async (req, res) => {
   try {
@@ -42,7 +95,12 @@ router.post('/register', async (req, res) => {
     } = req.body;
 
     const cleanEmail = normalizeEmail(email);
-    const cleanUsername = String(username || '').trim();
+    const cleanUsername = normalizeUsername(username);
+    const usernameLower = normalizeUsernameKey(cleanUsername);
+    const fullName = [first_name, middle_name, last_name, suffix]
+      .map((part) => String(part || '').trim())
+      .filter(Boolean)
+      .join(' ');
 
     if (!first_name || !last_name || !cleanEmail || !cleanUsername || !password || !confirm_password) {
       return res.status(400).json({ error: 'Please complete all required fields' });
@@ -55,7 +113,7 @@ router.post('/register', async (req, res) => {
 
     // Check if username already exists
     const usernameCheck = await db.collection('Users')
-      .where('username', '==', cleanUsername)
+      .where('username_lower', '==', usernameLower)
       .get();
 
     if (!usernameCheck.empty) {
@@ -66,25 +124,45 @@ router.post('/register', async (req, res) => {
     const userRecord = await admin.auth().createUser({
       email: cleanEmail,
       password,
-      displayName: `${first_name} ${last_name}`,
+      displayName: fullName,
     });
 
-    // Save full profile to Users collection
-    await db.collection('Users').doc(userRecord.uid).set({
-      first_name,
-      middle_name,
-      last_name,
-      suffix,
-      gender,
-      contact_number,
-      email: cleanEmail,
-      barangay,
-      street_block,
-      house_number,
-      username: cleanUsername,
-      role: 'resident',
-      created_at: admin.firestore.FieldValue.serverTimestamp(),
-    });
+    try {
+      // Save profile data only. Passwords stay in Firebase Auth.
+      await db.collection('Users').doc(userRecord.uid).set({
+        first_name: String(first_name || '').trim(),
+        middle_name: String(middle_name || '').trim(),
+        last_name: String(last_name || '').trim(),
+        suffix: String(suffix || '').trim(),
+        gender: String(gender || '').trim(),
+        contact_number: String(contact_number || '').trim(),
+        email: cleanEmail,
+        email_lower: cleanEmail,
+        barangay: String(barangay || '').trim(),
+        street_block: String(street_block || '').trim(),
+        house_number: String(house_number || '').trim(),
+        username: cleanUsername,
+        username_lower: usernameLower,
+        name: {
+          first: String(first_name || '').trim(),
+          middle: String(middle_name || '').trim(),
+          last: String(last_name || '').trim(),
+          suffix: String(suffix || '').trim(),
+          full: fullName,
+        },
+        address: {
+          barangay: String(barangay || '').trim(),
+          street_block: String(street_block || '').trim(),
+          house_number: String(house_number || '').trim(),
+        },
+        role: 'resident',
+        created_at: admin.firestore.FieldValue.serverTimestamp(),
+        updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    } catch (profileError) {
+      await admin.auth().deleteUser(userRecord.uid).catch(() => undefined);
+      throw profileError;
+    }
 
     res.status(201).json({
       message: 'Account created successfully',
@@ -98,11 +176,13 @@ router.post('/register', async (req, res) => {
   }
 });
 
-// Login with email + password
+// Login with email/username + password
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const cleanEmail = normalizeEmail(email);
+    const { email, identifier, username, password } = req.body;
+    const loginIdentifier = identifier || email || username;
+    const cleanEmail = await resolveLoginEmail(loginIdentifier);
+    const firebaseApiKey = getFirebaseApiKey();
 
     if (!firebaseApiKey) {
       return res.status(500).json({
@@ -111,7 +191,7 @@ router.post('/login', async (req, res) => {
     }
 
     if (!cleanEmail || !password) {
-      return res.status(400).json({ error: 'Email and password are required' });
+      return res.status(400).json({ error: 'Email or username and password are required' });
     }
 
     const authResponse = await axios.post(
@@ -140,6 +220,7 @@ router.post('/login', async (req, res) => {
     }
 
     const userData = userDoc.data();
+    const fullName = userData.name?.full || `${userData.first_name || ''} ${userData.last_name || ''}`.trim();
 
     res.json({
       message: 'Login successful',
@@ -150,7 +231,23 @@ router.post('/login', async (req, res) => {
       username: userData.username,
       role: userData.role,
       barangay: userData.barangay,
-      full_name: `${userData.first_name} ${userData.last_name}`,
+      full_name: fullName,
+      profile: {
+        name: userData.name || {
+          first: userData.first_name,
+          middle: userData.middle_name,
+          last: userData.last_name,
+          suffix: userData.suffix,
+          full: fullName,
+        },
+        address: userData.address || {
+          barangay: userData.barangay,
+          street_block: userData.street_block,
+          house_number: userData.house_number,
+        },
+        contact_number: userData.contact_number,
+        email: userData.email,
+      },
     });
   } catch (error) {
     const status = error.response?.status === 400 ? 401 : 500;
@@ -162,6 +259,7 @@ router.post('/login', async (req, res) => {
 router.post('/forgot-password', async (req, res) => {
   try {
     const cleanEmail = normalizeEmail(req.body.email);
+    const firebaseApiKey = getFirebaseApiKey();
 
     if (!firebaseApiKey) {
       return res.status(500).json({

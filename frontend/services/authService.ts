@@ -33,6 +33,22 @@ export type LoginResponse = {
   role: string;
   barangay?: string;
   full_name: string;
+  profile?: {
+    name?: {
+      first?: string;
+      middle?: string;
+      last?: string;
+      suffix?: string;
+      full?: string;
+    };
+    address?: {
+      barangay?: string;
+      street_block?: string;
+      house_number?: string;
+    };
+    contact_number?: string;
+    email?: string;
+  };
 };
 
 export type RegisterResponse = {
@@ -60,10 +76,10 @@ async function request<T>(path: string, options: RequestInit): Promise<T> {
   return data as T;
 }
 
-export function loginUser(email: string, password: string) {
+export function loginUser(identifier: string, password: string) {
   return request<LoginResponse>('/users/login', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ identifier, password }),
   });
 }
 

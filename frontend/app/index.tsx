@@ -9,22 +9,22 @@ import { Colors } from '@/constants/theme';
 import { loginUser } from '@/services/authService';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleLogin = async () => {
-    const cleanEmail = email.trim().toLowerCase();
+    const cleanIdentifier = identifier.trim();
 
-    if (!cleanEmail || !password) {
-      Alert.alert('Missing details', 'Please enter your email and password.');
+    if (!cleanIdentifier || !password) {
+      Alert.alert('Missing details', 'Please enter your email or username and password.');
       return;
     }
 
     try {
       setIsSubmitting(true);
-      const user = await loginUser(cleanEmail, password);
+      const user = await loginUser(cleanIdentifier, password);
       Alert.alert('Login successful', `Welcome back, ${user.full_name}.`);
     } catch (error) {
       Alert.alert('Login failed', error instanceof Error ? error.message : 'Please try again.');
@@ -38,12 +38,11 @@ export default function LoginScreen() {
       <View style={styles.form}>
         <AuthField
           autoCapitalize="none"
-          keyboardType="email-address"
-          label="Email"
-          onChangeText={setEmail}
-          placeholder="Your email"
-          textContentType="emailAddress"
-          value={email}
+          label="Email or Username"
+          onChangeText={setIdentifier}
+          placeholder="Your email or username"
+          textContentType="username"
+          value={identifier}
         />
         <AuthField
           label="Password"
