@@ -13,6 +13,7 @@ import { registerUser } from '@/services/authService';
 export default function SignupSecurityScreen() {
   const [agreed, setAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
   const [modal, setModal] = useState<{
     message?: string;
     status: 'success' | 'error';
@@ -27,6 +28,8 @@ export default function SignupSecurityScreen() {
   const requiredError = (value?: string) => (value?.trim() ? undefined : 'Required');
 
   const handleSignup = async () => {
+    setShowErrors(true);
+
     if (!isComplete) {
       setModal({
         status: 'error',
@@ -93,7 +96,7 @@ export default function SignupSecurityScreen() {
       <View style={styles.form}>
         <AuthField
           autoCapitalize="none"
-          error={requiredError(draft.username)}
+          error={showErrors ? requiredError(draft.username) : undefined}
           label="Create Username"
           onChangeText={(username) => updateDraft({ username })}
           placeholder="@delacruzjuan1"
@@ -102,7 +105,7 @@ export default function SignupSecurityScreen() {
           value={draft.username}
         />
         <AuthField
-          error={requiredError(draft.password)}
+          error={showErrors ? requiredError(draft.password) : undefined}
           label="Create Password"
           onChangeText={(password) => updateDraft({ password })}
           placeholder="********"
@@ -112,7 +115,7 @@ export default function SignupSecurityScreen() {
           value={draft.password}
         />
         <AuthField
-          error={requiredError(draft.confirm_password)}
+          error={showErrors ? requiredError(draft.confirm_password) : undefined}
           label="Confirm Password"
           onChangeText={(confirm_password) => updateDraft({ confirm_password })}
           placeholder="********"
@@ -133,7 +136,7 @@ export default function SignupSecurityScreen() {
       <View style={styles.actions}>
         <AuthButton title="Previous" variant="text" onPress={() => router.back()} />
         <AuthButton
-          disabled={isSubmitting || !isComplete}
+          disabled={isSubmitting}
           title={isSubmitting ? 'Saving...' : 'Continue'}
           style={styles.continueButton}
           onPress={handleSignup}

@@ -30,6 +30,7 @@ const barangayOptions = [
 export default function SignupAddressScreen() {
   const { draft, updateDraft } = useSignupDraft();
   const [showBarangayModal, setShowBarangayModal] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
 
   const isComplete = Boolean(
     draft.barangay?.trim() && draft.street_block?.trim() && draft.house_number?.trim()
@@ -38,6 +39,8 @@ export default function SignupAddressScreen() {
   const requiredError = (value?: string) => (value?.trim() ? undefined : 'Required');
 
   const handleNext = () => {
+    setShowErrors(true);
+
     if (!isComplete) {
       return;
     }
@@ -49,10 +52,10 @@ export default function SignupAddressScreen() {
     <AuthScreen title="Sign Up" logoMode="mark">
       <View style={styles.form}>
         <Pressable onPress={() => setShowBarangayModal(true)}>
-          <View pointerEvents="none">
+          <View style={styles.nonInteractive}>
             <AuthField
               editable={false}
-              error={requiredError(draft.barangay)}
+              error={showErrors ? requiredError(draft.barangay) : undefined}
               label="Barangay"
               placeholder="Choose barangay"
               required
@@ -61,7 +64,7 @@ export default function SignupAddressScreen() {
           </View>
         </Pressable>
         <AuthField
-          error={requiredError(draft.street_block)}
+          error={showErrors ? requiredError(draft.street_block) : undefined}
           label="Street/Block"
           onChangeText={(street_block) => updateDraft({ street_block })}
           placeholder="eg. Sampaguita St."
@@ -69,7 +72,7 @@ export default function SignupAddressScreen() {
           value={draft.street_block}
         />
         <AuthField
-          error={requiredError(draft.house_number)}
+          error={showErrors ? requiredError(draft.house_number) : undefined}
           keyboardType="number-pad"
           label="House Number"
           onChangeText={(house_number) => updateDraft({ house_number })}
@@ -80,12 +83,7 @@ export default function SignupAddressScreen() {
       </View>
       <View style={styles.actions}>
         <AuthButton title="Previous" variant="text" onPress={() => router.back()} />
-        <AuthButton
-          disabled={!isComplete}
-          title="Next"
-          style={styles.nextButton}
-          onPress={handleNext}
-        />
+        <AuthButton title="Next" style={styles.nextButton} onPress={handleNext} />
       </View>
       <OptionModal
         onClose={() => setShowBarangayModal(false)}
@@ -113,5 +111,8 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     width: 125,
+  },
+  nonInteractive: {
+    pointerEvents: 'none',
   },
 });

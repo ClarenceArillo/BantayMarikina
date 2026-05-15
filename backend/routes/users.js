@@ -28,6 +28,18 @@ function getFirebaseApiKey() {
 function getAuthErrorMessage(error) {
   const firebaseMessage = error.response?.data?.error?.message;
 
+  if (error.code === 'auth/email-already-exists') {
+    return 'Email already registered';
+  }
+
+  if (error.code === 'auth/invalid-email') {
+    return 'Please enter a valid email address';
+  }
+
+  if (error.code === 'auth/invalid-password') {
+    return 'Password should be at least 6 characters';
+  }
+
   if (
     firebaseMessage === 'EMAIL_NOT_FOUND' ||
     firebaseMessage === 'INVALID_PASSWORD' ||
@@ -45,6 +57,25 @@ function getAuthErrorMessage(error) {
   }
 
   return firebaseMessage || error.message || 'Authentication failed';
+}
+
+function getRegisterErrorStatus(error) {
+  const badRequestCodes = new Set([
+    'auth/email-already-exists',
+    'auth/invalid-email',
+    'auth/invalid-password',
+  ]);
+
+  return badRequestCodes.has(error.code) ? 400 : 500;
+}
+
+function logAuthError(action, error) {
+  console.error(`${action} failed:`, {
+    code: error.code,
+    message: error.message,
+    firebaseMessage: error.response?.data?.error?.message,
+    status: error.response?.status,
+  });
 }
 
 async function findUserByUsername(username) {
@@ -171,7 +202,8 @@ router.post('/register', async (req, res) => {
       email: cleanEmail,
     });
   } catch (error) {
-    const status = error.code === 'auth/email-already-exists' ? 400 : 500;
+    logAuthError('Register', error);
+    const status = getRegisterErrorStatus(error);
     res.status(status).json({ error: getAuthErrorMessage(error) });
   }
 });
@@ -250,6 +282,7 @@ router.post('/login', async (req, res) => {
       },
     });
   } catch (error) {
+    logAuthError('Login', error);
     const status = error.response?.status === 400 ? 401 : 500;
     res.status(status).json({ error: getAuthErrorMessage(error) });
   }

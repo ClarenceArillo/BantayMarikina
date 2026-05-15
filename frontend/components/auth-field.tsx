@@ -19,18 +19,20 @@ export function AuthField({
 }: AuthFieldProps) {
   return (
     <View style={styles.group}>
-      <Text style={styles.label}>{label}</Text>
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        {required ? <Text style={styles.requiredMark}>*</Text> : null}
+      </View>
       <View style={[styles.inputWrap, error ? styles.inputWrapError : undefined]}>
         <TextInput
           placeholderTextColor={Colors.light.placeholder}
           style={[
             styles.input,
-            rightElement || required ? styles.inputWithIcon : undefined,
+            rightElement ? styles.inputWithIcon : undefined,
             style,
           ]}
           {...inputProps}
         />
-        {required ? <Text style={styles.requiredMark}>*</Text> : null}
         {rightElement ? <View style={styles.rightElement}>{rightElement}</View> : null}
       </View>
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -42,6 +44,11 @@ const styles = StyleSheet.create({
   group: {
     gap: 8,
     marginBottom: 10,
+  },
+  labelRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 4,
   },
   label: {
     color: Colors.light.black,
@@ -79,9 +86,6 @@ const styles = StyleSheet.create({
     color: '#d53939',
     fontSize: 18,
     fontWeight: '700',
-    position: 'absolute',
-    right: 13,
-    top: 9,
   },
   errorText: {
     color: '#d53939',

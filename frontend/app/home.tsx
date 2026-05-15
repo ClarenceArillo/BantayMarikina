@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import type { ImageSourcePropType, ImageStyle, StyleProp } from 'react-native';
 
 import { Colors } from '@/constants/theme';
 import {
@@ -24,6 +25,26 @@ import {
 
 const mapStatic = require('@/assets/statics/map-static.png');
 const profileStatic = require('@/assets/statics/pfp.png');
+const iconSources = {
+  alert: require('@/assets/Icons/Alert.png'),
+  bantayLogo: require('@/assets/Icons/BantayLogo.png'),
+  cloudyDay: require('@/assets/Icons/CloudyDay.png'),
+  evacuation: require('@/assets/Icons/Evacuation.png'),
+  home: require('@/assets/Icons/Home.png'),
+  homeActive: require('@/assets/Icons/Home (2).png'),
+  hotline: require('@/assets/Icons/Hotline.png'),
+  map: require('@/assets/Icons/Map.png'),
+  mapActive: require('@/assets/Icons/Map (2).png'),
+  notification: require('@/assets/Icons/Notification.png'),
+  notificationActive: require('@/assets/Icons/Notification (2).png'),
+  pin: require('@/assets/Icons/Pin.png'),
+  profile: require('@/assets/Icons/Profile.png'),
+  profileActive: require('@/assets/Icons/Profile (2).png'),
+  rainyDay: require('@/assets/Icons/RainyDay.png'),
+  safetyTips: require('@/assets/Icons/SafetyTips.png'),
+  sunnyDay: require('@/assets/Icons/SunnyDay.png'),
+  water: require('@/assets/Icons/Water.png'),
+};
 
 const statusPalette = {
   Normal: { background: '#e4f8d9', foreground: '#538b3b', dot: '#589f39' },
@@ -42,125 +63,68 @@ function formatLevel(level: number | null) {
   return level.toFixed(2);
 }
 
-function WeatherGlyph({ condition, small = false }: { condition?: string; small?: boolean }) {
+function AssetIcon({
+  source,
+  style,
+  tintColor,
+}: {
+  source: ImageSourcePropType;
+  style: StyleProp<ImageStyle>;
+  tintColor?: string;
+}) {
+  return <Image source={source} style={[style, tintColor ? { tintColor } : null]} resizeMode="contain" />;
+}
+
+function getWeatherIcon(condition?: string) {
   const lower = condition?.toLowerCase() ?? '';
-  const isRain = lower.includes('rain') || lower.includes('drizzle') || lower.includes('thunder');
-  const isCloudy = lower.includes('cloud') || lower.includes('overcast') || lower.includes('fog');
-  const size = small ? 42 : 82;
+  if (lower.includes('rain') || lower.includes('drizzle') || lower.includes('thunder')) {
+    return iconSources.rainyDay;
+  }
+  if (lower.includes('cloud') || lower.includes('overcast') || lower.includes('fog')) {
+    return iconSources.cloudyDay;
+  }
+  return iconSources.sunnyDay;
+}
 
+function WeatherGlyph({ condition, small = false }: { condition?: string; small?: boolean }) {
   return (
-    <View style={[styles.weatherGlyph, { width: size, height: size }]}>
-      {!isRain ? <View style={[styles.sunCore, small && styles.sunCoreSmall]} /> : null}
-      {isCloudy || isRain ? (
-        <>
-          <View style={[styles.cloudBubbleLarge, small && styles.cloudBubbleSmall]} />
-          <View style={[styles.cloudBubbleMedium, small && styles.cloudBubbleMediumSmall]} />
-          <View style={[styles.cloudBase, small && styles.cloudBaseSmall]} />
-        </>
-      ) : null}
-      {isRain ? (
-        <View style={styles.rainDrops}>
-          <View style={styles.rainDrop} />
-          <View style={styles.rainDrop} />
-          <View style={styles.rainDrop} />
-        </View>
-      ) : null}
-    </View>
+    <AssetIcon
+      source={getWeatherIcon(condition)}
+      style={small ? styles.weatherIconSmall : styles.weatherIconLarge}
+    />
   );
 }
 
-function PinIcon({ color = Colors.light.primary }: { color?: string }) {
+function PinIcon({ color = '#d93a3a' }: { color?: string }) {
   return (
-    <View style={styles.pinIcon}>
-      <View style={[styles.pinHead, { borderColor: color }]}>
-        <View style={[styles.pinDot, { backgroundColor: color }]} />
-      </View>
-      <View style={[styles.pinTail, { borderTopColor: color }]} />
-    </View>
+    <AssetIcon source={iconSources.pin} style={styles.pinIcon} tintColor={color} />
   );
 }
 
-function RiverIcon() {
-  return (
-    <View style={styles.riverIcon}>
-      <View style={styles.riverWave} />
-      <View style={[styles.riverWave, styles.riverWaveLower]} />
-    </View>
-  );
+function SectionIcon({ type }: { type: 'water' | 'map' }) {
+  return <AssetIcon source={type === 'water' ? iconSources.water : iconSources.mapActive} style={styles.sectionIcon} />;
 }
 
-function SimpleIcon({ name, active = false }: { name: string; active?: boolean }) {
-  const color = active ? Colors.light.primary : '#f5fbff';
+function NavIcon({ name, active = false }: { name: 'home' | 'map' | 'report' | 'bell' | 'user'; active?: boolean }) {
+  const sourceByName = {
+    home: active ? iconSources.homeActive : iconSources.home,
+    map: active ? iconSources.mapActive : iconSources.map,
+    report: iconSources.alert,
+    bell: active ? iconSources.notificationActive : iconSources.notification,
+    user: active ? iconSources.profileActive : iconSources.profileActive,
+  };
 
-  if (name === 'home') {
-    return (
-      <View style={styles.iconBox}>
-        <View style={[styles.homeRoof, { borderBottomColor: color }]} />
-        <View style={[styles.homeBody, { borderColor: color }]} />
-      </View>
-    );
-  }
-
-  if (name === 'map') {
-    return (
-      <View style={styles.iconBox}>
-        <View style={[styles.mapFold, { borderColor: color }]} />
-        <View style={[styles.mapPin, { backgroundColor: color }]} />
-      </View>
-    );
-  }
-
-  if (name === 'bell') {
-    return (
-      <View style={styles.iconBox}>
-        <View style={[styles.bellDome, { borderColor: color }]} />
-        <View style={[styles.bellClapper, { backgroundColor: color }]} />
-      </View>
-    );
-  }
-
-  if (name === 'user') {
-    return (
-      <View style={styles.iconBox}>
-        <View style={[styles.userHead, { borderColor: color }]} />
-        <View style={[styles.userBody, { borderColor: color }]} />
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.iconBox}>
-      <View style={[styles.reportDiamond, { borderColor: color }]} />
-      <View style={[styles.reportLine, { backgroundColor: color }]} />
-    </View>
-  );
+  return <AssetIcon source={sourceByName[name]} style={styles.navIcon} />;
 }
 
 function ActionIcon({ type }: { type: 'evacuation' | 'hotlines' | 'tips' }) {
-  if (type === 'hotlines') {
-    return (
-      <View style={styles.actionIcon}>
-        <View style={styles.phoneArc} />
-        <View style={styles.phoneBase} />
-      </View>
-    );
-  }
+  const sourceByType = {
+    evacuation: iconSources.evacuation,
+    hotlines: iconSources.hotline,
+    tips: iconSources.safetyTips,
+  };
 
-  if (type === 'tips') {
-    return (
-      <View style={styles.actionIcon}>
-        <View style={styles.shieldTop} />
-        <View style={styles.shieldBottom} />
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.actionIcon}>
-      <View style={styles.evacRoof} />
-      <View style={styles.evacDoor} />
-    </View>
-  );
+  return <AssetIcon source={sourceByType[type]} style={styles.actionIcon} />;
 }
 
 function StatusBadge({ status }: { status: RiverStation['status'] }) {
@@ -240,9 +204,7 @@ export default function HomeDashboard() {
           <RefreshControl refreshing={isRefreshing} onRefresh={() => loadDashboard(true)} />
         }>
         <View style={styles.header}>
-          <View style={styles.logoMark}>
-            <RiverIcon />
-          </View>
+          <Image source={iconSources.bantayLogo} style={styles.logoImage} resizeMode="contain" />
           <View style={styles.headerCopy}>
             <Text style={styles.welcome}>Welcome,</Text>
             <Text style={styles.name}>{displayName}!</Text>
@@ -308,7 +270,7 @@ export default function HomeDashboard() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={styles.cardTitleRow}>
-              <RiverIcon />
+              <SectionIcon type="water" />
               <Text style={styles.cardTitle}>River Water Level</Text>
             </View>
             {waterLevel?.updated_at ? (
@@ -332,7 +294,7 @@ export default function HomeDashboard() {
         <View style={styles.card}>
           <View style={styles.cardHeader}>
             <View style={styles.cardTitleRow}>
-              <SimpleIcon name="map" />
+              <SectionIcon type="map" />
               <Text style={styles.cardTitle}>Live Map</Text>
             </View>
             <Pressable>
@@ -348,26 +310,26 @@ export default function HomeDashboard() {
       <View style={styles.bottomNav}>
         <Pressable style={styles.navItem}>
           <View style={styles.activeIconBubble}>
-            <SimpleIcon name="home" active />
+            <NavIcon name="home" active />
           </View>
           <Text style={styles.activeNavLabel}>Home</Text>
         </Pressable>
         <Pressable style={styles.navItem}>
-          <SimpleIcon name="map" />
+          <NavIcon name="map" />
           <Text style={styles.navLabel}>Map</Text>
         </Pressable>
         <Pressable style={[styles.navItem, styles.reportNav]}>
           <View style={styles.reportButton}>
-            <SimpleIcon name="report" active />
+            <NavIcon name="report" active />
           </View>
           <Text style={styles.navLabel}>Report</Text>
         </Pressable>
         <Pressable style={styles.navItem}>
-          <SimpleIcon name="bell" />
+          <NavIcon name="bell" />
           <Text style={styles.navLabel}>Notification</Text>
         </Pressable>
         <Pressable style={styles.navItem}>
-          <SimpleIcon name="user" />
+          <NavIcon name="user" />
           <Text style={styles.navLabel}>Profile</Text>
         </Pressable>
       </View>
@@ -391,13 +353,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
   },
-  logoMark: {
-    alignItems: 'center',
-    backgroundColor: '#eef7ff',
-    borderRadius: 18,
-    height: 58,
-    justifyContent: 'center',
-    width: 58,
+  logoImage: {
+    height: 64,
+    width: 64,
   },
   headerCopy: {
     flex: 1,
@@ -716,255 +674,28 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '900',
   },
-  weatherGlyph: {
-    position: 'relative',
+  weatherIconLarge: {
+    height: 82,
+    width: 92,
   },
-  sunCore: {
-    backgroundColor: '#ffd35a',
-    borderRadius: 34,
-    height: 68,
-    left: 6,
-    position: 'absolute',
-    top: 4,
-    width: 68,
-  },
-  sunCoreSmall: {
-    borderRadius: 18,
-    height: 36,
-    left: 3,
-    top: 1,
-    width: 36,
-  },
-  cloudBubbleLarge: {
-    backgroundColor: '#f7fbff',
-    borderRadius: 22,
-    height: 44,
-    left: 14,
-    position: 'absolute',
-    top: 23,
-    width: 44,
-  },
-  cloudBubbleSmall: {
-    borderRadius: 12,
-    height: 24,
-    left: 8,
-    top: 13,
-    width: 24,
-  },
-  cloudBubbleMedium: {
-    backgroundColor: '#dfefff',
-    borderRadius: 18,
-    height: 36,
-    left: 38,
-    position: 'absolute',
-    top: 30,
-    width: 36,
-  },
-  cloudBubbleMediumSmall: {
-    borderRadius: 10,
-    height: 20,
-    left: 21,
-    top: 17,
-    width: 20,
-  },
-  cloudBase: {
-    backgroundColor: '#f7fbff',
-    borderRadius: 16,
-    height: 29,
-    left: 12,
-    position: 'absolute',
-    top: 46,
-    width: 66,
-  },
-  cloudBaseSmall: {
-    borderRadius: 9,
-    height: 17,
-    left: 6,
-    top: 26,
-    width: 34,
-  },
-  rainDrops: {
-    flexDirection: 'row',
-    gap: 8,
-    left: 20,
-    position: 'absolute',
-    top: 60,
-  },
-  rainDrop: {
-    backgroundColor: '#bfe7ff',
-    borderRadius: 4,
-    height: 14,
-    transform: [{ rotate: '18deg' }],
-    width: 4,
+  weatherIconSmall: {
+    height: 42,
+    width: 50,
   },
   pinIcon: {
-    alignItems: 'center',
     height: 17,
-    justifyContent: 'center',
-    width: 12,
+    width: 11,
   },
-  pinHead: {
-    alignItems: 'center',
-    borderRadius: 7,
-    borderWidth: 2,
-    height: 12,
-    justifyContent: 'center',
-    width: 12,
-  },
-  pinDot: {
-    borderRadius: 2,
-    height: 4,
-    width: 4,
-  },
-  pinTail: {
-    borderLeftColor: 'transparent',
-    borderLeftWidth: 4,
-    borderRightColor: 'transparent',
-    borderRightWidth: 4,
-    borderTopWidth: 7,
-    marginTop: -2,
-  },
-  riverIcon: {
+  sectionIcon: {
     height: 20,
-    justifyContent: 'center',
-    width: 22,
-  },
-  riverWave: {
-    borderColor: Colors.light.primary,
-    borderRadius: 10,
-    borderTopWidth: 3,
-    height: 9,
-    transform: [{ rotate: '-4deg' }],
-    width: 22,
-  },
-  riverWaveLower: {
-    marginTop: -4,
-    opacity: 0.7,
-  },
-  iconBox: {
-    alignItems: 'center',
-    height: 23,
-    justifyContent: 'center',
-    width: 26,
-  },
-  homeRoof: {
-    borderLeftColor: 'transparent',
-    borderLeftWidth: 10,
-    borderRightColor: 'transparent',
-    borderRightWidth: 10,
-    borderBottomWidth: 10,
-    height: 0,
-    width: 0,
-  },
-  homeBody: {
-    borderRadius: 3,
-    borderWidth: 2,
-    height: 12,
-    marginTop: -1,
-    width: 17,
-  },
-  mapFold: {
-    borderRadius: 3,
-    borderWidth: 2,
-    height: 17,
-    width: 21,
-  },
-  mapPin: {
-    borderRadius: 4,
-    height: 8,
-    marginTop: -12,
-    width: 8,
-  },
-  bellDome: {
-    borderBottomWidth: 0,
-    borderTopLeftRadius: 10,
-    borderTopRightRadius: 10,
-    borderWidth: 2,
-    height: 16,
-    width: 17,
-  },
-  bellClapper: {
-    borderRadius: 3,
-    height: 5,
-    marginTop: -1,
-    width: 5,
-  },
-  userHead: {
-    borderRadius: 7,
-    borderWidth: 2,
-    height: 12,
-    width: 12,
-  },
-  userBody: {
-    borderBottomWidth: 0,
-    borderRadius: 9,
-    borderWidth: 2,
-    height: 9,
-    marginTop: 1,
     width: 20,
   },
-  reportDiamond: {
-    borderRadius: 4,
-    borderWidth: 2,
-    height: 19,
-    transform: [{ rotate: '45deg' }],
-    width: 19,
-  },
-  reportLine: {
-    borderRadius: 1,
-    height: 10,
-    marginTop: -15,
-    width: 2,
+  navIcon: {
+    height: 24,
+    width: 24,
   },
   actionIcon: {
-    alignItems: 'center',
     height: 18,
-    justifyContent: 'center',
     width: 18,
-  },
-  phoneArc: {
-    borderColor: '#111',
-    borderLeftWidth: 3,
-    borderRadius: 8,
-    borderTopWidth: 3,
-    height: 14,
-    transform: [{ rotate: '-45deg' }],
-    width: 14,
-  },
-  phoneBase: {
-    backgroundColor: '#111',
-    borderRadius: 2,
-    height: 5,
-    marginTop: -8,
-    transform: [{ rotate: '-45deg' }],
-    width: 9,
-  },
-  shieldTop: {
-    backgroundColor: '#111',
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
-    height: 10,
-    width: 15,
-  },
-  shieldBottom: {
-    borderLeftColor: 'transparent',
-    borderLeftWidth: 7,
-    borderRightColor: 'transparent',
-    borderRightWidth: 7,
-    borderTopColor: '#111',
-    borderTopWidth: 8,
-  },
-  evacRoof: {
-    borderBottomColor: '#111',
-    borderBottomWidth: 8,
-    borderLeftColor: 'transparent',
-    borderLeftWidth: 9,
-    borderRightColor: 'transparent',
-    borderRightWidth: 9,
-  },
-  evacDoor: {
-    backgroundColor: '#111',
-    height: 9,
-    width: 14,
   },
 });

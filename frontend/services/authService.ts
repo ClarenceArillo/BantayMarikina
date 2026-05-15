@@ -1,11 +1,27 @@
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
-const localBaseUrl = Platform.select({
-  android: 'http://10.0.2.2:3000/api',
-  default: 'http://localhost:3000/api',
-});
+function getExpoHost() {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    return window.location.hostname;
+  }
 
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? localBaseUrl ?? 'http://localhost:3000/api';
+  const hostUri = Constants.expoConfig?.hostUri;
+  return hostUri?.split(':')[0];
+}
+
+function getLocalBaseUrl() {
+  if (Platform.OS === 'android' && !getExpoHost()) {
+    return 'http://10.0.2.2:3000/api';
+  }
+
+  const host = getExpoHost() || 'localhost';
+  return `http://${host}:3000/api`;
+}
+
+const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
+
+export const API_BASE_URL = configuredApiUrl || getLocalBaseUrl();
 
 export type RegisterPayload = {
   first_name: string;

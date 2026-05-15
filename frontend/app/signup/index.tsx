@@ -13,6 +13,7 @@ const genderOptions = ['Male', 'Female', 'Rather not say'];
 export default function SignupProfileScreen() {
   const { draft, updateDraft } = useSignupDraft();
   const [showGenderModal, setShowGenderModal] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
 
   const isComplete = Boolean(
     draft.first_name.trim() &&
@@ -25,6 +26,8 @@ export default function SignupProfileScreen() {
   const requiredError = (value?: string) => (value?.trim() ? undefined : 'Required');
 
   const handleNext = () => {
+    setShowErrors(true);
+
     if (!isComplete) {
       return;
     }
@@ -36,7 +39,7 @@ export default function SignupProfileScreen() {
     <AuthScreen title="Sign Up" logoMode="mark">
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <AuthField
-          error={requiredError(draft.first_name)}
+          error={showErrors ? requiredError(draft.first_name) : undefined}
           label="First Name"
           onChangeText={(first_name) => updateDraft({ first_name })}
           placeholder="eg. Juan"
@@ -51,7 +54,7 @@ export default function SignupProfileScreen() {
           value={draft.middle_name}
         />
         <AuthField
-          error={requiredError(draft.last_name)}
+          error={showErrors ? requiredError(draft.last_name) : undefined}
           label="Last Name"
           onChangeText={(last_name) => updateDraft({ last_name })}
           placeholder="eg. De La Cruz"
@@ -66,10 +69,10 @@ export default function SignupProfileScreen() {
           value={draft.suffix}
         />
         <Pressable onPress={() => setShowGenderModal(true)}>
-          <View pointerEvents="none">
+          <View style={styles.nonInteractive}>
             <AuthField
               editable={false}
-              error={requiredError(draft.gender)}
+              error={showErrors ? requiredError(draft.gender) : undefined}
               label="Gender"
               placeholder="Choose gender"
               required
@@ -78,7 +81,7 @@ export default function SignupProfileScreen() {
           </View>
         </Pressable>
         <AuthField
-          error={requiredError(draft.contact_number)}
+          error={showErrors ? requiredError(draft.contact_number) : undefined}
           keyboardType="phone-pad"
           label="Contact Number"
           onChangeText={(contact_number) => updateDraft({ contact_number })}
@@ -89,7 +92,7 @@ export default function SignupProfileScreen() {
         />
         <AuthField
           autoCapitalize="none"
-          error={requiredError(draft.email)}
+          error={showErrors ? requiredError(draft.email) : undefined}
           keyboardType="email-address"
           label="Email"
           onChangeText={(email) => updateDraft({ email })}
@@ -98,12 +101,7 @@ export default function SignupProfileScreen() {
           textContentType="emailAddress"
           value={draft.email}
         />
-        <AuthButton
-          disabled={!isComplete}
-          title="Next"
-          style={styles.nextButton}
-          onPress={handleNext}
-        />
+        <AuthButton title="Next" style={styles.nextButton} onPress={handleNext} />
       </ScrollView>
       <OptionModal
         onClose={() => setShowGenderModal(false)}
@@ -125,5 +123,8 @@ const styles = StyleSheet.create({
   },
   nextButton: {
     marginTop: 10,
+  },
+  nonInteractive: {
+    pointerEvents: 'none',
   },
 });
