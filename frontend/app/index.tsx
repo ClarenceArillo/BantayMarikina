@@ -7,9 +7,11 @@ import { AuthField } from '@/components/auth-field';
 import { AuthStatusModal } from '@/components/auth-modal';
 import { AuthScreen } from '@/components/auth-screen';
 import { Colors } from '@/constants/theme';
+import { useAuthSession } from '@/context/auth-context';
 import { LoginResponse, loginUser } from '@/services/authService';
 
 export default function LoginScreen() {
+  const { setSession } = useAuthSession();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -36,6 +38,7 @@ export default function LoginScreen() {
     try {
       setIsSubmitting(true);
       const user = await loginUser(cleanIdentifier, password);
+      setSession(user);
       setLoggedInUser(user);
       setModal({
         status: 'success',
@@ -62,7 +65,17 @@ export default function LoginScreen() {
         pathname: '/home',
         params: {
           fullName: user.full_name,
+          firstName: user.profile?.name?.first ?? '',
+          middleName: user.profile?.name?.middle ?? '',
+          lastName: user.profile?.name?.last ?? '',
+          suffix: user.profile?.name?.suffix ?? '',
+          gender: user.profile?.gender ?? '',
+          contactNumber: user.profile?.contact_number ?? '',
+          email: user.profile?.email ?? '',
           barangay: user.barangay ?? user.profile?.address?.barangay ?? '',
+          streetBlock: user.profile?.address?.street_block ?? '',
+          houseNumber: user.profile?.address?.house_number ?? '',
+          username: user.username ?? '',
         },
       });
       return;

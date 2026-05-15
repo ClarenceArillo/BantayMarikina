@@ -62,8 +62,10 @@ export type LoginResponse = {
       street_block?: string;
       house_number?: string;
     };
+    barangay?: string;
     contact_number?: string;
     email?: string;
+    gender?: string;
   };
 };
 
@@ -72,6 +74,44 @@ export type RegisterResponse = {
   uid: string;
   username: string;
   email: string;
+};
+
+export type UserProfileResponse = {
+  uid: string;
+  username: string;
+  role: string;
+  full_name: string;
+  profile: {
+    name?: {
+      first?: string;
+      middle?: string;
+      last?: string;
+      suffix?: string;
+      full?: string;
+    };
+    address?: {
+      barangay?: string;
+      street_block?: string;
+      house_number?: string;
+    };
+    barangay?: string;
+    contact_number?: string;
+    email?: string;
+    gender?: string;
+  };
+};
+
+export type UpdateProfilePayload = {
+  first_name: string;
+  middle_name?: string;
+  last_name: string;
+  suffix?: string;
+  gender?: string;
+  contact_number?: string;
+  email: string;
+  barangay?: string;
+  street_block?: string;
+  house_number?: string;
 };
 
 async function request<T>(path: string, options: RequestInit): Promise<T> {
@@ -92,6 +132,16 @@ async function request<T>(path: string, options: RequestInit): Promise<T> {
   return data as T;
 }
 
+function requestWithAuth<T>(path: string, idToken: string, options: RequestInit = {}): Promise<T> {
+  return request<T>(path, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${idToken}`,
+      ...options.headers,
+    },
+  });
+}
+
 export function loginUser(identifier: string, password: string) {
   return request<LoginResponse>('/users/login', {
     method: 'POST',
@@ -110,5 +160,16 @@ export function sendPasswordReset(email: string) {
   return request<{ message: string }>('/users/forgot-password', {
     method: 'POST',
     body: JSON.stringify({ email }),
+  });
+}
+
+export function getCurrentUserProfile(idToken: string) {
+  return requestWithAuth<UserProfileResponse>('/users/me', idToken);
+}
+
+export function updateCurrentUserProfile(idToken: string, payload: UpdateProfilePayload) {
+  return requestWithAuth<UserProfileResponse>('/users/me', idToken, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
   });
 }

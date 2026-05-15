@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -14,6 +14,7 @@ import {
 import type { ImageSourcePropType, ImageStyle, StyleProp } from 'react-native';
 
 import { Colors } from '@/constants/theme';
+import { useAuthSession } from '@/context/auth-context';
 import {
   getWaterLevels,
   getWeather,
@@ -162,9 +163,23 @@ function RiverRow({ station }: { station: RiverStation }) {
 }
 
 export default function HomeDashboard() {
-  const params = useLocalSearchParams<{ fullName?: string; barangay?: string }>();
-  const fullName = typeof params.fullName === 'string' ? params.fullName : 'Juan De La Cruz';
-  const barangay = typeof params.barangay === 'string' ? params.barangay : '';
+  const { session } = useAuthSession();
+  const params = useLocalSearchParams<{
+    barangay?: string;
+    contactNumber?: string;
+    email?: string;
+    firstName?: string;
+    fullName?: string;
+    gender?: string;
+    houseNumber?: string;
+    lastName?: string;
+    middleName?: string;
+    streetBlock?: string;
+    suffix?: string;
+    username?: string;
+  }>();
+  const fullName = session?.full_name || (typeof params.fullName === 'string' ? params.fullName : 'Juan De La Cruz');
+  const barangay = session?.barangay || (typeof params.barangay === 'string' ? params.barangay : '');
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [waterLevel, setWaterLevel] = useState<WaterLevelData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -328,7 +343,9 @@ export default function HomeDashboard() {
           <NavIcon name="bell" />
           <Text style={styles.navLabel}>Notification</Text>
         </Pressable>
-        <Pressable style={styles.navItem}>
+        <Pressable
+          style={styles.navItem}
+          onPress={() => router.push('/profile')}>
           <NavIcon name="user" />
           <Text style={styles.navLabel}>Profile</Text>
         </Pressable>

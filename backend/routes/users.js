@@ -78,6 +78,55 @@ function logAuthError(action, error) {
   });
 }
 
+async function requireAuthenticatedUser(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+
+    if (!match) {
+      return res.status(401).json({ error: 'Authentication token is required' });
+    }
+
+    const decodedToken = await admin.auth().verifyIdToken(match[1]);
+    req.auth = decodedToken;
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: 'Invalid or expired authentication token' });
+  }
+}
+
+function buildProfileResponse(uid, userData) {
+  const fullName = userData.name?.full || [userData.first_name, userData.middle_name, userData.last_name, userData.suffix]
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join(' ');
+
+  return {
+    uid,
+    username: userData.username || '',
+    role: userData.role || 'resident',
+    full_name: fullName,
+    profile: {
+      name: userData.name || {
+        first: userData.first_name || '',
+        middle: userData.middle_name || '',
+        last: userData.last_name || '',
+        suffix: userData.suffix || '',
+        full: fullName,
+      },
+      address: userData.address || {
+        barangay: userData.barangay || '',
+        street_block: userData.street_block || '',
+        house_number: userData.house_number || '',
+      },
+      barangay: userData.barangay || userData.address?.barangay || '',
+      contact_number: userData.contact_number || '',
+      email: userData.email || '',
+      gender: userData.gender || '',
+    },
+  };
+}
+
 async function findUserByUsername(username) {
   const usernameLower = normalizeUsernameKey(username);
 
@@ -114,6 +163,84 @@ async function resolveLoginEmail(identifier) {
   const userDoc = await findUserByUsername(cleanIdentifier);
   return userDoc?.data().email || null;
 }
+
+router.get('/me', requireAuthenticatedUser, async (req, res) => {
+  try {
+    const userDoc = await db.collection('Users').doc(req.auth.uid).get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+
+    return res.json(buildProfileResponse(req.auth.uid, userDoc.data()));
+  } catch (error) {
+    logAuthError('Get profile', error);
+    return res.status(500).json({ error: 'Unable to load profile' });
+  }
+});
+
+router.patch('/me', requireAuthenticatedUser, async (req, res) => {
+  try {
+    const {
+      first_name, middle_name, last_name, suffix,
+      gender, contact_number, email,
+      barangay, street_block, house_number,
+    } = req.body;
+
+    const cleanEmail = normalizeEmail(email);
+    const cleanFirstName = String(first_name || '').trim();
+    const cleanMiddleName = String(middle_name || '').trim();
+    const cleanLastName = String(last_name || '').trim();
+    const cleanSuffix = String(suffix || '').trim();
+    const fullName = [cleanFirstName, cleanMiddleName, cleanLastName, cleanSuffix]
+      .filter(Boolean)
+      .join(' ');
+
+    if (!cleanFirstName || !cleanLastName || !cleanEmail) {
+      return res.status(400).json({ error: 'First name, last name, and email are required' });
+    }
+
+    const userRef = db.collection('Users').doc(req.auth.uid);
+    const userDoc = await userRef.get();
+
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+
+    await userRef.update({
+      first_name: cleanFirstName,
+      middle_name: cleanMiddleName,
+      last_name: cleanLastName,
+      suffix: cleanSuffix,
+      gender: String(gender || '').trim(),
+      contact_number: String(contact_number || '').trim(),
+      email: cleanEmail,
+      email_lower: cleanEmail,
+      barangay: String(barangay || '').trim(),
+      street_block: String(street_block || '').trim(),
+      house_number: String(house_number || '').trim(),
+      name: {
+        first: cleanFirstName,
+        middle: cleanMiddleName,
+        last: cleanLastName,
+        suffix: cleanSuffix,
+        full: fullName,
+      },
+      address: {
+        barangay: String(barangay || '').trim(),
+        street_block: String(street_block || '').trim(),
+        house_number: String(house_number || '').trim(),
+      },
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const updatedDoc = await userRef.get();
+    return res.json(buildProfileResponse(req.auth.uid, updatedDoc.data()));
+  } catch (error) {
+    logAuthError('Update profile', error);
+    return res.status(500).json({ error: 'Unable to update profile' });
+  }
+});
 
 // Register
 router.post('/register', async (req, res) => {
@@ -279,6 +406,7 @@ router.post('/login', async (req, res) => {
         },
         contact_number: userData.contact_number,
         email: userData.email,
+        gender: userData.gender,
       },
     });
   } catch (error) {
