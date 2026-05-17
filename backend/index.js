@@ -1,6 +1,12 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cron = require('node-cron');
+const {
+  refreshWaterLevels,
+  refreshWeather,
+  warmDashboardCache,
+} = require('./services/dashboardCache');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -26,4 +32,16 @@ app.use('/api/waterlevel', waterLevelRouter);
 
 app.listen(PORT, HOST, () => {
   console.log(`Server running on http://${HOST}:${PORT}`);
+});
+
+warmDashboardCache();
+cron.schedule('*/10 * * * *', () => {
+  refreshWeather().catch((error) => {
+    console.error('Failed to refresh weather cache:', error.message);
+  });
+});
+cron.schedule('*/5 * * * *', () => {
+  refreshWaterLevels().catch((error) => {
+    console.error('Failed to refresh water level cache:', error.message);
+  });
 });

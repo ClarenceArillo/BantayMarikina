@@ -101,6 +101,10 @@ export type UserProfileResponse = {
   };
 };
 
+export type FirebaseCustomTokenResponse = {
+  customToken: string;
+};
+
 export type UpdateProfilePayload = {
   first_name: string;
   middle_name?: string;
@@ -160,6 +164,12 @@ export function sendPasswordReset(email: string) {
   return request<{ message: string }>('/users/forgot-password', {
     method: 'POST',
     body: JSON.stringify({ email }),
+  });
+}
+
+export function getFirebaseCustomToken(idToken: string) {
+  return requestWithAuth<FirebaseCustomTokenResponse>('/users/firebase-token', idToken, {
+    method: 'POST',
   });
 }
 

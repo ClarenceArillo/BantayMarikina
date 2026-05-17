@@ -447,4 +447,13 @@ router.post('/forgot-password', async (req, res) => {
   }
 });
 
+router.post('/firebase-token', requireAuthenticatedUser, async (req, res) => {
+  try {
+    const customToken = await admin.auth().createCustomToken(req.auth.uid);
+    res.json({ customToken });
+  } catch (error) {
+    res.status(500).json({ error: 'Unable to create Firebase session token' });
+  }
+});
+
 module.exports = router;

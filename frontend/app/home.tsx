@@ -16,9 +16,10 @@ import type { ImageSourcePropType, ImageStyle, StyleProp } from 'react-native';
 import { Colors } from '@/constants/theme';
 import { useAuthSession } from '@/context/auth-context';
 import {
-  getWaterLevels,
-  getWeather,
+  getDashboardSnapshot,
+  refreshDashboardData,
   RiverStation,
+  subscribeDashboardData,
   WaterLevelData,
   WeatherData,
   WeatherForecast,
@@ -180,43 +181,50 @@ export default function HomeDashboard() {
   }>();
   const fullName = session?.full_name || (typeof params.fullName === 'string' ? params.fullName : 'Juan De La Cruz');
   const barangay = session?.barangay || (typeof params.barangay === 'string' ? params.barangay : '');
-  const [weather, setWeather] = useState<WeatherData | null>(null);
-  const [waterLevel, setWaterLevel] = useState<WaterLevelData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const initialDashboard = getDashboardSnapshot();
+  const [weather, setWeather] = useState<WeatherData | null>(() => initialDashboard.weather);
+  const [waterLevel, setWaterLevel] = useState<WaterLevelData | null>(() => initialDashboard.waterLevel);
+  const [isLoading, setIsLoading] = useState(() => !initialDashboard.weather || !initialDashboard.waterLevel);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const displayName = useMemo(() => getFirstName(fullName), [fullName]);
 
-  const loadDashboard = useCallback(async (refreshing = false) => {
+  const refreshDashboard = useCallback(async () => {
     try {
-      if (refreshing) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
+      setIsRefreshing(true);
       setError(null);
-      const [weatherData, waterData] = await Promise.all([getWeather(), getWaterLevels()]);
-      setWeather(weatherData);
-      setWaterLevel(waterData);
+      const data = await refreshDashboardData();
+      setWeather(data.weather);
+      setWaterLevel(data.waterLevel);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load dashboard.');
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
-    loadDashboard();
-  }, [loadDashboard]);
+    return subscribeDashboardData(
+      (data) => {
+        setWeather(data.weather);
+        setWaterLevel(data.waterLevel);
+        setError(null);
+        setIsLoading(false);
+      },
+      (dashboardError) => {
+        setError(dashboardError.message);
+        setIsLoading(false);
+      }
+    );
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={() => loadDashboard(true)} />
+          <RefreshControl refreshing={isRefreshing} onRefresh={refreshDashboard} />
         }>
         <View style={styles.header}>
           <Image source={iconSources.bantayLogo} style={styles.logoImage} resizeMode="contain" />
@@ -243,7 +251,7 @@ export default function HomeDashboard() {
         </View>
 
         {error ? (
-          <Pressable style={styles.errorBanner} onPress={() => loadDashboard()}>
+          <Pressable style={styles.errorBanner} onPress={refreshDashboard}>
             <Text style={styles.errorTitle}>Live data unavailable</Text>
             <Text style={styles.errorMessage}>{error}. Tap to retry.</Text>
           </Pressable>
