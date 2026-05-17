@@ -19,7 +19,8 @@
   },
   "scripts": {
     "start": "node --use-system-ca index.js",
-    "dev": "nodemon --exec \"node --use-system-ca\" index.js"
+    "dev": "nodemon --exec \"node --use-system-ca\" index.js",
+    "tunnel": "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -R 80:127.0.0.1:3000 nokey@localhost.run"
   },
   "keywords": [],
   "author": "",
