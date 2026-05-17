@@ -1,4 +1,16 @@
-import { doc, getDoc, onSnapshot, type Unsubscribe } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+  type QueryConstraint,
+  type Unsubscribe,
+} from 'firebase/firestore';
 
 import { getFirebaseClients } from '@/config/firebase';
 
@@ -18,6 +30,11 @@ export type WeatherData = {
   condition: string;
   forecast: WeatherForecast[];
   updated_at: string;
+  last_checked_at?: string;
+  source?: string;
+  source_observed_at?: string | null;
+  source_status?: 'ok' | 'error' | 'no_readings' | string;
+  source_message?: string | null;
 };
 
 export type RiverStation = {
@@ -25,11 +42,24 @@ export type RiverStation = {
   level: number | null;
   status: 'Normal' | 'Warning' | 'Critical' | 'Unavailable' | string;
   last_reading: string | null;
+  source_station?: string;
+  trend?: string | null;
+  alarms?: Array<{
+    name: string;
+    level: string;
+    threshold: number;
+  }>;
+  values?: Record<string, number | null> | null;
 };
 
 export type WaterLevelData = {
   stations: RiverStation[];
   updated_at: string;
+  last_checked_at?: string;
+  source?: string;
+  source_observed_at?: string | null;
+  source_status?: 'ok' | 'error' | 'no_readings' | string;
+  source_message?: string | null;
 };
 
 export type DashboardData = {
@@ -53,6 +83,11 @@ const errorListeners = new Set<DashboardErrorListener>();
 function getDashboardDoc(id: 'weather' | 'waterlevel') {
   const { db } = getFirebaseClients();
   return doc(db, 'DashboardData', id);
+}
+
+function getDashboardRecordsCollection(id: 'weather' | 'waterlevel') {
+  const { db } = getFirebaseClients();
+  return collection(db, 'DashboardData', id, 'records');
 }
 
 function cleanFirestoreData<T>(data: unknown): T | null {
@@ -147,4 +182,25 @@ export async function refreshDashboardData() {
 
   publish(nextData);
   return nextData;
+}
+
+export async function getDashboardRecords<T extends WeatherData | WaterLevelData>(
+  id: 'weather' | 'waterlevel',
+  options: { endAt?: string; max?: number; startAt?: string } = {}
+) {
+  const constraints: QueryConstraint[] = [];
+
+  if (options.startAt) {
+    constraints.push(where('checked_at', '>=', options.startAt));
+  }
+
+  if (options.endAt) {
+    constraints.push(where('checked_at', '<=', options.endAt));
+  }
+
+  constraints.push(orderBy('checked_at', 'desc'));
+  constraints.push(limit(options.max ?? 24));
+
+  const snapshot = await getDocs(query(getDashboardRecordsCollection(id), ...constraints));
+  return snapshot.docs.map((record) => cleanFirestoreData<T>(record.data())).filter(Boolean) as T[];
 }

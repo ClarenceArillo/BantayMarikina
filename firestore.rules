@@ -52,6 +52,11 @@ service cloud.firestore {
     match /DashboardData/{docId} {
       allow read: if docId in ['weather', 'waterlevel'];
       allow write: if false;
+
+      match /records/{recordId} {
+        allow read: if docId in ['weather', 'waterlevel'];
+        allow write: if false;
+      }
     }
 
     match /Users/{userId} {

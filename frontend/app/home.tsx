@@ -65,6 +65,12 @@ function formatLevel(level: number | null) {
   return level.toFixed(2);
 }
 
+function getSourceLabel(sourceStatus?: string) {
+  if (!sourceStatus) return 'Cached';
+  if (sourceStatus === 'no_readings') return 'No Reading';
+  return sourceStatus === 'ok' ? 'Live' : 'Source Offline';
+}
+
 function AssetIcon({
   source,
   style,
@@ -296,8 +302,8 @@ export default function HomeDashboard() {
               <SectionIcon type="water" />
               <Text style={styles.cardTitle}>River Water Level</Text>
             </View>
-            {waterLevel?.updated_at ? (
-              <Text style={styles.updatedText}>Live</Text>
+            {waterLevel?.updated_at || waterLevel?.last_checked_at ? (
+              <Text style={styles.updatedText}>{getSourceLabel(waterLevel.source_status)}</Text>
             ) : null}
           </View>
           <View style={styles.tableHeader}>
