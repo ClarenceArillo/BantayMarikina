@@ -4,8 +4,11 @@
   "version": "1.0.0",
   "scripts": {
     "start": "expo start",
-    "start:lan": "expo start --lan --clear",
-    "start:tunnel": "expo start --tunnel --clear",
+    "start:lan": "expo start --host lan --clear",
+    "start:lan:ip": "set REACT_NATIVE_PACKAGER_HOSTNAME=192.168.100.20&& expo start --host lan --clear",
+    "android:usb:reverse": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/android-usb-reverse.ps1",
+    "start:android-usb": "npm run android:usb:reverse && set REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1&& expo start --host localhost --clear",
+    "start:tunnel": "expo start --host tunnel --clear",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
