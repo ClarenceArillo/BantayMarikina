@@ -179,6 +179,19 @@ router.get('/me', requireAuthenticatedUser, async (req, res) => {
   }
 });
 
+router.post('/firebase-token', requireAuthenticatedUser, async (req, res) => {
+  try {
+    const customToken = await admin.auth().createCustomToken(req.auth.uid, {
+      role: req.auth.role || 'resident',
+    });
+
+    return res.json({ customToken });
+  } catch (error) {
+    logAuthError('Create Firebase custom token', error);
+    return res.status(500).json({ error: 'Unable to create Firebase session' });
+  }
+});
+
 router.patch('/me', requireAuthenticatedUser, async (req, res) => {
   try {
     const {

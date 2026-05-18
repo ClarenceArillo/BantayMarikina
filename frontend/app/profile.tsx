@@ -1,5 +1,4 @@
 import * as ImagePicker from 'expo-image-picker';
-import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -15,6 +14,7 @@ import {
   View,
 } from 'react-native';
 
+import { BottomNav } from '@/components/BottomNav';
 import { Colors } from '@/constants/theme';
 import { useAuthSession } from '@/context/auth-context';
 import {
@@ -27,13 +27,6 @@ const logo = require('@/assets/Logo/BantayMarikinaLogo.png');
 const defaultProfile = require('@/assets/statics/pfp.png');
 const cameraIcon = require('@/assets/Icons/Camera.png');
 const penIcon = require('@/assets/Icons/Pen.png');
-const iconSources = {
-  alert: require('@/assets/Icons/Alert.png'),
-  home: require('@/assets/Icons/Home.png'),
-  map: require('@/assets/Icons/Map.png'),
-  notification: require('@/assets/Icons/Notification.png'),
-  profileActive: require('@/assets/Icons/Profile (2).png'),
-};
 
 type ProfileForm = {
   barangay: string;
@@ -103,18 +96,6 @@ function ProfileField({
       />
     </View>
   );
-}
-
-function NavIcon({ name }: { name: 'home' | 'map' | 'report' | 'bell' | 'user' }) {
-  const sourceByName = {
-    bell: iconSources.notification,
-    home: iconSources.home,
-    map: iconSources.map,
-    report: iconSources.alert,
-    user: iconSources.profileActive,
-  };
-
-  return <Image source={sourceByName[name]} style={styles.navIcon} resizeMode="contain" />;
 }
 
 export default function ProfileScreen() {
@@ -277,32 +258,7 @@ export default function ProfileScreen() {
         )}
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        <Pressable style={styles.navItem} onPress={() => router.push('/home')}>
-          <NavIcon name="home" />
-          <Text style={styles.navLabel}>Home</Text>
-        </Pressable>
-        <Pressable style={styles.navItem}>
-          <NavIcon name="map" />
-          <Text style={styles.navLabel}>Map</Text>
-        </Pressable>
-        <Pressable style={[styles.navItem, styles.reportNav]}>
-          <View style={styles.reportButton}>
-            <NavIcon name="report" />
-          </View>
-          <Text style={styles.navLabel}>Report</Text>
-        </Pressable>
-        <Pressable style={styles.navItem}>
-          <NavIcon name="bell" />
-          <Text style={styles.navLabel}>Notification</Text>
-        </Pressable>
-        <Pressable style={styles.navItem}>
-          <View style={styles.activeIconBubble}>
-            <NavIcon name="user" />
-          </View>
-          <Text style={styles.activeNavLabel}>Profile</Text>
-        </Pressable>
-      </View>
+      <BottomNav activeTab="profile" />
     </SafeAreaView>
   );
 }
@@ -439,67 +395,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '800',
-  },
-  bottomNav: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(45, 117, 180, 0.92)',
-    borderRadius: 50,
-    bottom: 24,
-    elevation: 6,
-    flexDirection: 'row',
-    height: 58,
-    justifyContent: 'space-around',
-    left: 16,
-    paddingHorizontal: 10,
-    position: 'absolute',
-    right: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  navItem: {
-    alignItems: 'center',
-    flex: 1,
-    gap: 3,
-    justifyContent: 'center',
-  },
-  reportNav: {
-    marginTop: -26,
-  },
-  activeIconBubble: {
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    height: 31,
-    justifyContent: 'center',
-    width: 38,
-  },
-  reportButton: {
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 28,
-    elevation: 5,
-    height: 56,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    width: 56,
-  },
-  navLabel: {
-    color: '#fff',
-    fontSize: 8,
-    fontWeight: '700',
-  },
-  activeNavLabel: {
-    color: '#fff',
-    fontSize: 8,
-    fontWeight: '900',
-  },
-  navIcon: {
-    height: 24,
-    width: 24,
   },
 });

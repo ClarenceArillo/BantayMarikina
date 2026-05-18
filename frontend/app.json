@@ -26,6 +26,12 @@
     "plugins": [
       "expo-router",
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Bantay Marikina uses your location to place hazard reports accurately and show nearby incidents."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/Logo/BantayMarikinaLogo.png",

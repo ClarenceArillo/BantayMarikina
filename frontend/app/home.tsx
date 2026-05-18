@@ -13,8 +13,12 @@ import {
 } from 'react-native';
 import type { ImageSourcePropType, ImageStyle, StyleProp } from 'react-native';
 
+import { BottomNav } from '@/components/BottomNav';
+import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
+import { HazardMapView } from '@/components/HazardMapView';
 import { Colors } from '@/constants/theme';
 import { useAuthSession } from '@/context/auth-context';
+import { useHazardReports } from '@/hooks/useHazardReports';
 import {
   getDashboardSnapshot,
   refreshDashboardData,
@@ -24,8 +28,8 @@ import {
   WeatherData,
   WeatherForecast,
 } from '@/services/dashboardService';
+import type { HazardReport } from '@/types/hazard';
 
-const mapStatic = require('@/assets/statics/map-static.png');
 const profileStatic = require('@/assets/statics/pfp.png');
 const iconSources = {
   alert: require('@/assets/Icons/Alert.png'),
@@ -113,18 +117,6 @@ function SectionIcon({ type }: { type: 'water' | 'map' }) {
   return <AssetIcon source={type === 'water' ? iconSources.water : iconSources.mapActive} style={styles.sectionIcon} />;
 }
 
-function NavIcon({ name, active = false }: { name: 'home' | 'map' | 'report' | 'bell' | 'user'; active?: boolean }) {
-  const sourceByName = {
-    home: active ? iconSources.homeActive : iconSources.home,
-    map: active ? iconSources.mapActive : iconSources.map,
-    report: iconSources.alert,
-    bell: active ? iconSources.notificationActive : iconSources.notification,
-    user: active ? iconSources.profileActive : iconSources.profileActive,
-  };
-
-  return <AssetIcon source={sourceByName[name]} style={styles.navIcon} />;
-}
-
 function ActionIcon({ type }: { type: 'evacuation' | 'hotlines' | 'tips' }) {
   const sourceByType = {
     evacuation: iconSources.evacuation,
@@ -193,8 +185,15 @@ export default function HomeDashboard() {
   const [isLoading, setIsLoading] = useState(() => !initialDashboard.weather || !initialDashboard.waterLevel);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
+  const {
+    reports: hazardReports,
+    isLoading: isMapLoading,
+    error: mapError,
+  } = useHazardReports(session?.idToken, 150);
 
   const displayName = useMemo(() => getFirstName(fullName), [fullName]);
+  const openMap = useCallback(() => router.push('/map' as never), []);
 
   const refreshDashboard = useCallback(async () => {
     try {
@@ -326,44 +325,27 @@ export default function HomeDashboard() {
               <SectionIcon type="map" />
               <Text style={styles.cardTitle}>Live Map</Text>
             </View>
-            <Pressable>
+            <Pressable onPress={openMap}>
               <Text style={styles.mapLink}>View Full Map</Text>
             </Pressable>
           </View>
-          <Image source={mapStatic} style={styles.mapImage} />
+          <HazardMapView
+            reports={hazardReports}
+            pinSource={iconSources.pin}
+            isLoading={isMapLoading}
+            error={mapError}
+            height={321}
+            compact
+            onMarkerPress={setSelectedReport}
+            onMapPress={openMap}
+          />
         </View>
 
         <Text style={styles.footerHint}>{barangay ? `${barangay} resident dashboard` : 'Marikina resident dashboard'}</Text>
       </ScrollView>
 
-      <View style={styles.bottomNav}>
-        <Pressable style={styles.navItem}>
-          <View style={styles.activeIconBubble}>
-            <NavIcon name="home" active />
-          </View>
-          <Text style={styles.activeNavLabel}>Home</Text>
-        </Pressable>
-        <Pressable style={styles.navItem}>
-          <NavIcon name="map" />
-          <Text style={styles.navLabel}>Map</Text>
-        </Pressable>
-        <Pressable style={[styles.navItem, styles.reportNav]}>
-          <View style={styles.reportButton}>
-            <NavIcon name="report" active />
-          </View>
-          <Text style={styles.navLabel}>Report</Text>
-        </Pressable>
-        <Pressable style={styles.navItem}>
-          <NavIcon name="bell" />
-          <Text style={styles.navLabel}>Notification</Text>
-        </Pressable>
-        <Pressable
-          style={styles.navItem}
-          onPress={() => router.push('/profile')}>
-          <NavIcon name="user" />
-          <Text style={styles.navLabel}>Profile</Text>
-        </Pressable>
-      </View>
+      <BottomNav activeTab="home" />
+      <HazardDetailsSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
     </SafeAreaView>
   );
 }
@@ -635,75 +617,10 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '800',
   },
-  mapImage: {
-    borderColor: 'rgba(0, 0, 0, 0.2)',
-    borderRadius: 5,
-    borderWidth: 1,
-    height: 321,
-    width: '100%',
-  },
   footerHint: {
     color: Colors.light.muted,
     fontSize: 11,
     textAlign: 'center',
-  },
-  bottomNav: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(45, 117, 180, 0.92)',
-    borderRadius: 50,
-    bottom: 24,
-    elevation: 6,
-    flexDirection: 'row',
-    height: 58,
-    justifyContent: 'space-around',
-    left: 24,
-    paddingHorizontal: 10,
-    position: 'absolute',
-    right: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-  },
-  navItem: {
-    alignItems: 'center',
-    flex: 1,
-    gap: 3,
-    justifyContent: 'center',
-  },
-  reportNav: {
-    marginTop: -26,
-  },
-  activeIconBubble: {
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    height: 31,
-    justifyContent: 'center',
-    width: 38,
-  },
-  reportButton: {
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 28,
-    elevation: 5,
-    height: 56,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    width: 56,
-  },
-  navLabel: {
-    color: '#fff',
-    fontSize: 8,
-    fontWeight: '700',
-  },
-  activeNavLabel: {
-    color: '#fff',
-    fontSize: 8,
-    fontWeight: '900',
   },
   weatherIconLarge: {
     height: 82,
@@ -720,10 +637,6 @@ const styles = StyleSheet.create({
   sectionIcon: {
     height: 20,
     width: 20,
-  },
-  navIcon: {
-    height: 24,
-    width: 24,
   },
   actionIcon: {
     height: 18,

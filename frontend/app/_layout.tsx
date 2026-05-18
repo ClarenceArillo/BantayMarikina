@@ -14,6 +14,8 @@ export default function RootLayout() {
           }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="home" />
+          <Stack.Screen name="map" />
+          <Stack.Screen name="report" />
           <Stack.Screen name="profile" />
           <Stack.Screen name="forgot-password" />
           <Stack.Screen name="signup/index" />
