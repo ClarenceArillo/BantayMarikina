@@ -3,6 +3,7 @@ const serviceAccount = require('./serviceAccountKey.json');
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
+  storageBucket: 'marikina-hazard-system.firebasestorage.app',
 });
 
 const db = admin.firestore();

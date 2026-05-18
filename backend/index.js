@@ -13,6 +13,9 @@ const reportsRouter = require('./routes/reports');
 const usersRouter = require('./routes/users');
 const weatherRouter = require('./routes/weather');
 const waterLevelRouter = require('./routes/waterlevel');
+const infoRouter = require('./routes/info');
+const uploadRouter = require('./routes/upload');
+const notificationsRouter = require('./routes/notifications');
 
 app.get('/', (req, res) => {
   res.json({ message: 'MarikinaSafeWatch API is running!' });
@@ -22,6 +25,9 @@ app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/weather', weatherRouter);
 app.use('/api/waterlevel', waterLevelRouter);
+app.use('/api/info', infoRouter);
+app.use('/api/upload', uploadRouter);
+app.use('/api/notifications', notificationsRouter);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

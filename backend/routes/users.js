@@ -95,4 +95,19 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// Save FCM token for push notifications
+router.post('/token', async (req, res) => {
+  try {
+    const { uid, fcm_token } = req.body;
+
+    await db.collection('Users').doc(uid).update({
+      fcm_token,
+    });
+
+    res.json({ message: 'FCM token saved' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;
