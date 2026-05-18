@@ -1,0 +1,73 @@
+[debug] [2026-05-17T16:50:02.479Z] ----------------------------------------------------------------------
+[debug] [2026-05-17T16:50:02.481Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\CLARENCE\AppData\Local\npm-cache\_npx\7750544ccf494d8b\node_modules\firebase-tools\lib\bin\firebase.js deploy --only firestore:rules
+[debug] [2026-05-17T16:50:02.482Z] CLI Version:   15.18.0
+[debug] [2026-05-17T16:50:02.482Z] Platform:      win32
+[debug] [2026-05-17T16:50:02.482Z] Node Version:  v22.20.0
+[debug] [2026-05-17T16:50:02.482Z] Time:          Mon May 18 2026 00:50:02 GMT+0800 (Taiwan Standard Time)
+[debug] [2026-05-17T16:50:02.482Z] ----------------------------------------------------------------------
+[debug] 
+[debug] [2026-05-17T16:50:05.246Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-05-17T16:50:05.247Z] > authorizing via signed-in user (clarencerarillo@gmail.com)
+[debug] [2026-05-17T16:50:05.248Z] [iam] checking project marikina-hazard-system for permissions ["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]
+[debug] [2026-05-17T16:50:05.249Z] Checked if tokens are valid: false, expires at: 1779034832410
+[debug] [2026-05-17T16:50:05.249Z] Checked if tokens are valid: false, expires at: 1779034832410
+[debug] [2026-05-17T16:50:05.250Z] > refreshing access token with scopes: []
+[debug] [2026-05-17T16:50:05.251Z] >>> [apiv2][query] POST https://www.googleapis.com/oauth2/v3/token [none]
+[debug] [2026-05-17T16:50:05.251Z] >>> [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-17T16:50:05.506Z] <<< [apiv2][status] POST https://www.googleapis.com/oauth2/v3/token 200
+[debug] [2026-05-17T16:50:05.506Z] <<< [apiv2][body] POST https://www.googleapis.com/oauth2/v3/token [omitted]
+[debug] [2026-05-17T16:50:05.515Z] >>> [apiv2][query] POST https://cloudresourcemanager.googleapis.com/v1/projects/marikina-hazard-system:testIamPermissions [none]
+[debug] [2026-05-17T16:50:05.515Z] >>> [apiv2][(partial)header] POST https://cloudresourcemanager.googleapis.com/v1/projects/marikina-hazard-system:testIamPermissions  x-goog-user-project=marikina-hazard-system
+[debug] [2026-05-17T16:50:05.515Z] >>> [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/marikina-hazard-system:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[debug] [2026-05-17T16:50:06.495Z] <<< [apiv2][status] POST https://cloudresourcemanager.googleapis.com/v1/projects/marikina-hazard-system:testIamPermissions 200
+[debug] [2026-05-17T16:50:06.496Z] <<< [apiv2][body] POST https://cloudresourcemanager.googleapis.com/v1/projects/marikina-hazard-system:testIamPermissions {"permissions":["datastore.indexes.create","datastore.indexes.delete","datastore.indexes.list","datastore.indexes.update","firebase.projects.get"]}
+[info] 
+[info] === Deploying to 'marikina-hazard-system'...
+[info] 
+[info] i  deploying firestore 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[info] i  firestore: ensuring required API firestore.googleapis.com is enabled... 
+[debug] [2026-05-17T16:50:06.500Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:06.500Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:06.500Z] >>> [apiv2][query] GET https://firestore.googleapis.com/v1/projects/marikina-hazard-system/databases/(default) [none]
+[debug] [2026-05-17T16:50:06.871Z] <<< [apiv2][status] GET https://firestore.googleapis.com/v1/projects/marikina-hazard-system/databases/(default) 200
+[debug] [2026-05-17T16:50:06.871Z] <<< [apiv2][body] GET https://firestore.googleapis.com/v1/projects/marikina-hazard-system/databases/(default) {"name":"projects/marikina-hazard-system/databases/(default)","uid":"93172d74-39a1-4e03-ab87-77cfedb90eee","createTime":"2026-04-22T13:50:04.993558Z","updateTime":"2026-04-22T13:50:04.993558Z","locationId":"asia-southeast1","type":"FIRESTORE_NATIVE","concurrencyMode":"PESSIMISTIC","versionRetentionPeriod":"3600s","earliestVersionTime":"2026-05-17T15:50:07.217966Z","appEngineIntegrationMode":"DISABLED","keyPrefix":"zas","pointInTimeRecoveryEnablement":"POINT_IN_TIME_RECOVERY_DISABLED","deleteProtectionState":"DELETE_PROTECTION_DISABLED","databaseEdition":"STANDARD","freeTier":true,"realtimeUpdatesMode":"REALTIME_UPDATES_MODE_ENABLED","etag":"IPT5j+jjwJQDMNnojbDNgZQD"}
+[info] i  cloud.firestore: checking firestore.rules for compilation errors... 
+[debug] [2026-05-17T16:50:06.872Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:06.872Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:06.873Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system:test [none]
+[debug] [2026-05-17T16:50:06.873Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system:test [omitted]
+[debug] [2026-05-17T16:50:08.311Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system:test 200
+[debug] [2026-05-17T16:50:08.311Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system:test {}
+[info] +  cloud.firestore: rules file firestore.rules compiled successfully 
+[debug] [2026-05-17T16:50:08.313Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:08.314Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:08.314Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/releases pageSize=10&pageToken=
+[debug] [2026-05-17T16:50:08.670Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/releases 200
+[debug] [2026-05-17T16:50:08.670Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/releases {"releases":[{"name":"projects/marikina-hazard-system/releases/cloud.firestore","rulesetName":"projects/marikina-hazard-system/rulesets/640c8efb-196a-487d-938b-1ef02060eb4d","createTime":"2026-04-22T13:50:10.369994Z","updateTime":"2026-05-17T15:21:04.806321Z"}]}
+[debug] [2026-05-17T16:50:08.671Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:08.671Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:08.671Z] >>> [apiv2][query] GET https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/rulesets/640c8efb-196a-487d-938b-1ef02060eb4d [none]
+[debug] [2026-05-17T16:50:08.992Z] <<< [apiv2][status] GET https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/rulesets/640c8efb-196a-487d-938b-1ef02060eb4d 200
+[debug] [2026-05-17T16:50:08.992Z] <<< [apiv2][body] GET https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/rulesets/640c8efb-196a-487d-938b-1ef02060eb4d [omitted]
+[info] i  firestore: uploading rules firestore.rules... 
+[debug] [2026-05-17T16:50:08.994Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:08.994Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:08.994Z] >>> [apiv2][query] POST https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/rulesets [none]
+[debug] [2026-05-17T16:50:08.994Z] >>> [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/rulesets [omitted]
+[debug] [2026-05-17T16:50:10.337Z] <<< [apiv2][status] POST https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/rulesets 200
+[debug] [2026-05-17T16:50:10.337Z] <<< [apiv2][body] POST https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/rulesets {"name":"projects/marikina-hazard-system/rulesets/e3af1ba1-41d1-4c7f-89b0-af116286d815","source":{"files":[{"content":"rules_version = '2';\r\n\r\nservice cloud.firestore {\r\n  match /databases/{database}/documents {\r\n    function signedIn() {\r\n      return request.auth != null;\r\n    }\r\n\r\n    function validMarikinaPoint() {\r\n      return request.resource.data.latitude is number\r\n        && request.resource.data.longitude is number\r\n        && request.resource.data.latitude >= 14.57\r\n        && request.resource.data.latitude <= 14.72\r\n        && request.resource.data.longitude >= 121.03\r\n        && request.resource.data.longitude <= 121.18;\r\n    }\r\n\r\n    function validHazardReport() {\r\n      return request.resource.data.hazardType in [\r\n          'Flood',\r\n          'Fire',\r\n          'Landslide',\r\n          'Earthquake Damage',\r\n          'Road Blockage',\r\n          'Power Outage',\r\n          'Others'\r\n        ]\r\n        && request.resource.data.description is string\r\n        && request.resource.data.description.size() >= 8\r\n        && request.resource.data.description.size() <= 240\r\n        && request.resource.data.severity in ['Low', 'Moderate', 'High', 'Critical']\r\n        && request.resource.data.status in ['active', 'pending']\r\n        && validMarikinaPoint();\r\n    }\r\n\r\n    match /Reports/{reportId} {\n      allow read: if signedIn();\n      allow create: if signedIn()\n        && request.resource.data.userId == request.auth.uid\r\n        && validHazardReport();\r\n      allow update: if signedIn()\r\n        && resource.data.userId == request.auth.uid\r\n        && request.resource.data.diff(resource.data).changedKeys().hasOnly([\r\n          'description',\r\n          'imageUrl',\r\n          'image_url',\r\n          'updatedAt'\r\n        ]);\r\n      allow delete: if false;\n    }\n\n    match /DashboardData/{docId} {\n      allow read: if docId in ['weather', 'waterlevel'];\n      allow write: if false;\n\n      match /records/{recordId} {\n        allow read: if docId in ['weather', 'waterlevel'];\n        allow write: if false;\n      }\n    }\n\n    match /Users/{userId} {\n      allow read, update: if signedIn() && request.auth.uid == userId;\n      allow create: if false;\n    }\r\n  }\r\n}\r\n","name":"firestore.rules"}]},"createTime":"2026-05-17T16:50:10.578879Z","metadata":{"services":["cloud.firestore"]}}
+[debug] [2026-05-17T16:50:10.337Z] [rules] created ruleset projects/marikina-hazard-system/rulesets/e3af1ba1-41d1-4c7f-89b0-af116286d815
+[debug] [2026-05-17T16:50:10.337Z] [rules] releasing cloud.firestore with ruleset projects/marikina-hazard-system/rulesets/e3af1ba1-41d1-4c7f-89b0-af116286d815
+[debug] [2026-05-17T16:50:10.338Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:10.338Z] Checked if tokens are valid: true, expires at: 1779040204507
+[debug] [2026-05-17T16:50:10.338Z] >>> [apiv2][query] PATCH https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/releases/cloud.firestore [none]
+[debug] [2026-05-17T16:50:10.338Z] >>> [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/releases/cloud.firestore {"release":{"name":"projects/marikina-hazard-system/releases/cloud.firestore","rulesetName":"projects/marikina-hazard-system/rulesets/e3af1ba1-41d1-4c7f-89b0-af116286d815"}}
+[debug] [2026-05-17T16:50:11.680Z] <<< [apiv2][status] PATCH https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/releases/cloud.firestore 200
+[debug] [2026-05-17T16:50:11.680Z] <<< [apiv2][body] PATCH https://firebaserules.googleapis.com/v1/projects/marikina-hazard-system/releases/cloud.firestore {"name":"projects/marikina-hazard-system/releases/cloud.firestore","rulesetName":"projects/marikina-hazard-system/rulesets/e3af1ba1-41d1-4c7f-89b0-af116286d815","createTime":"2026-04-22T13:50:10.369994Z","updateTime":"2026-05-17T16:50:11.926075Z"}
+[debug] [2026-05-17T16:50:11.680Z] [rules] updated release projects/marikina-hazard-system/releases/cloud.firestore
+[info] +  firestore: released rules firestore.rules to cloud.firestore 
+[info] 
+[info] +  Deploy complete! 
+[info] 
+[info] Project Console: https://console.firebase.google.com/project/marikina-hazard-system/overview
