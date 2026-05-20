@@ -4,3 +4,5 @@ backend/.env
 backend/serviceAccountKey.json
 frontend/.env
 .env
+*.log
+frontend/.expo*
