@@ -5,4 +5,6 @@ backend/serviceAccountKey.json
 frontend/.env
 .env
 *.log
+*.pid
+backend-tunnel.url
 frontend/.expo*

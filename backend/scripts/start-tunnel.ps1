@@ -1,9 +1,15 @@
+param(
+  [switch]$NoWait
+)
+
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $frontendEnvPath = Join-Path $projectRoot 'frontend\.env'
 $outLog = Join-Path $projectRoot 'backend-localhostrun.out.log'
 $errLog = Join-Path $projectRoot 'backend-localhostrun.err.log'
+$pidPath = Join-Path $projectRoot 'backend-tunnel.pid'
+$urlPath = Join-Path $projectRoot 'backend-tunnel.url'
 
 Get-CimInstance Win32_Process -Filter "name = 'ssh.exe'" |
   Where-Object { $_.CommandLine -match 'localhost\.run' } |
@@ -71,6 +77,13 @@ Set-Content -Path $frontendEnvPath -Value $nextLines
 
 Write-Host "Backend tunnel is ready: $url"
 Write-Host "Updated frontend/.env to EXPO_PUBLIC_API_URL=$url/api"
+if ($NoWait) {
+  Set-Content -Path $pidPath -Value $process.Id
+  Set-Content -Path $urlPath -Value $url
+  Write-Host "Tunnel process id: $($process.Id)"
+  exit 0
+}
+
 Write-Host 'Keep this terminal open while testing. Press Ctrl+C to stop the tunnel.'
 
 Wait-Process -Id $process.Id
