@@ -66,6 +66,9 @@ export type LoginResponse = {
     contact_number?: string;
     email?: string;
     gender?: string;
+    photoURL?: string;
+    profilePhotoUrl?: string;
+    profile_photo_url?: string;
   };
 };
 
@@ -98,6 +101,9 @@ export type UserProfileResponse = {
     contact_number?: string;
     email?: string;
     gender?: string;
+    photoURL?: string;
+    profilePhotoUrl?: string;
+    profile_photo_url?: string;
   };
 };
 

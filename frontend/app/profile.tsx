@@ -22,6 +22,8 @@ import {
   UserProfileResponse,
   updateCurrentUserProfile,
 } from '@/services/authService';
+import { ensureFirebaseSession } from '@/services/firebaseSession';
+import { uploadUserProfilePhoto } from '@/services/profilePhotoService';
 
 const logo = require('@/assets/Logo/BantayMarikinaLogo.png');
 const defaultProfile = require('@/assets/Icons/Default Profile.png');
@@ -114,6 +116,7 @@ export default function ProfileScreen() {
   const fallbackName = session?.full_name ?? '';
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState<ProfileForm>(() => toForm());
   const [error, setError] = useState('');
@@ -164,7 +167,24 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
-      setProfilePhotoUri(result.assets[0].uri);
+      const localUri = result.assets[0].uri;
+      setProfilePhotoUri(localUri);
+
+      if (!idToken || !session?.uid) {
+        Alert.alert('Photo not saved', 'Secure profile session is unavailable.');
+        return;
+      }
+
+      try {
+        setIsUploadingPhoto(true);
+        await ensureFirebaseSession(idToken);
+        const remoteUri = await uploadUserProfilePhoto(session.uid, localUri);
+        setProfilePhotoUri(remoteUri);
+      } catch (uploadError) {
+        Alert.alert('Photo not saved', uploadError instanceof Error ? uploadError.message : 'Please try again.');
+      } finally {
+        setIsUploadingPhoto(false);
+      }
     }
   };
 
@@ -211,8 +231,12 @@ export default function ProfileScreen() {
         <View style={styles.profileHeader}>
           <View style={styles.photoWrap}>
             <Image source={profileSource} style={[styles.profilePhoto, { backgroundColor: theme.surfaceMuted, borderColor: theme.borderSoft }]} resizeMode="cover" />
-            <Pressable style={[styles.photoButton, { backgroundColor: theme.primary, borderColor: theme.background }]} onPress={pickProfilePhoto}>
-              <Image source={cameraIcon} style={styles.photoButtonIcon} resizeMode="contain" />
+            <Pressable style={[styles.photoButton, { backgroundColor: theme.primary, borderColor: theme.background }]} onPress={pickProfilePhoto} disabled={isUploadingPhoto}>
+              {isUploadingPhoto ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Image source={cameraIcon} style={styles.photoButtonIcon} resizeMode="contain" />
+              )}
             </Pressable>
           </View>
           <Text style={[styles.fullName, { color: theme.text }]}>{fullName}</Text>

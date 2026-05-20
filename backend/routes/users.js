@@ -123,6 +123,9 @@ function buildProfileResponse(uid, userData) {
       contact_number: userData.contact_number || '',
       email: userData.email || '',
       gender: userData.gender || '',
+      photoURL: userData.photoURL || userData.profilePhotoUrl || userData.profile_photo_url || '',
+      profilePhotoUrl: userData.profilePhotoUrl || userData.photoURL || userData.profile_photo_url || '',
+      profile_photo_url: userData.profile_photo_url || userData.profilePhotoUrl || userData.photoURL || '',
     },
   };
 }
@@ -420,6 +423,9 @@ router.post('/login', async (req, res) => {
         contact_number: userData.contact_number,
         email: userData.email,
         gender: userData.gender,
+        photoURL: userData.photoURL || userData.profilePhotoUrl || userData.profile_photo_url || '',
+        profilePhotoUrl: userData.profilePhotoUrl || userData.photoURL || userData.profile_photo_url || '',
+        profile_photo_url: userData.profile_photo_url || userData.profilePhotoUrl || userData.photoURL || '',
       },
     });
   } catch (error) {

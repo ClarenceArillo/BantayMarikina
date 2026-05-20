@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import type { LoginResponse, UserProfileResponse } from '@/services/authService';
+import { ensureFirebaseSession } from '@/services/firebaseSession';
+import { getUserProfilePhotoUrl } from '@/services/profilePhotoService';
 
 type AuthSessionContextValue = {
   session: LoginResponse | null;
@@ -23,10 +25,34 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    let isActive = true;
+
     AsyncStorage.getItem(`bantay.profile.photo.${session.uid}`)
-      .then((uri) => setProfilePhotoUriState(uri ?? ''))
-      .catch(() => setProfilePhotoUriState(''));
-  }, [session?.uid]);
+      .then((uri) => {
+        if (isActive) {
+          setProfilePhotoUriState(uri ?? session.profile?.profilePhotoUrl ?? session.profile?.profile_photo_url ?? session.profile?.photoURL ?? '');
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setProfilePhotoUriState('');
+        }
+      });
+
+    ensureFirebaseSession(session.idToken)
+      .then(() => getUserProfilePhotoUrl(session.uid))
+      .then((uri) => {
+        if (!isActive || !uri) return;
+
+        setProfilePhotoUriState(uri);
+        AsyncStorage.setItem(`bantay.profile.photo.${session.uid}`, uri).catch(() => undefined);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isActive = false;
+    };
+  }, [session?.idToken, session?.profile?.photoURL, session?.profile?.profilePhotoUrl, session?.profile?.profile_photo_url, session?.uid]);
 
   const setProfilePhotoUri = useCallback((uri: string) => {
     setProfilePhotoUriState(uri);
