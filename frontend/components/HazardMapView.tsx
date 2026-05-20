@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
-import { Colors } from '@/constants/theme';
+import { useTheme } from '@/theme/useTheme';
 import type { HazardReport } from '@/types/hazard';
 
 const MARIKINA_CENTER = { latitude: 14.6507, longitude: 121.1029 };
@@ -88,7 +88,14 @@ function getImageUri(source: ImageSourcePropType) {
   return '';
 }
 
-function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean) {
+function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isDark: boolean) {
+  const tileUrl = isDark
+    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+  const mapBackground = isDark ? '#111827' : '#e7eef4';
+  const popupBackground = isDark ? '#172033' : '#ffffff';
+  const popupText = isDark ? '#f8fafc' : '#111827';
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -98,7 +105,8 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean) {
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
   <style>
     html, body, #map { height: 100%; margin: 0; width: 100%; }
-    body { background: #e7eef4; }
+    body { background: ${mapBackground}; }
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: ${popupBackground}; color: ${popupText}; }
     .hazard-pin { filter: drop-shadow(0 5px 7px rgba(0,0,0,.28)); }
     .hazard-pin-wrap { align-items: center; display: flex; justify-content: center; position: relative; }
     .hazard-pin-wrap::after {
@@ -135,7 +143,7 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean) {
     let userMarker = null;
     let userAccuracy = null;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    L.tileLayer('${tileUrl}', {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
@@ -261,13 +269,14 @@ export function HazardMapView({
   onMapPress,
   focusSignal = 0,
 }: HazardMapViewProps) {
+  const { colors, isDark } = useTheme();
   const webViewRef = useRef<WebView>(null);
   const reportsRef = useRef(reports);
   const isMapReadyRef = useRef(false);
   const pendingPayloadRef = useRef<object | null>(null);
   const lastFocusSignalRef = useRef(focusSignal);
   const pinUri = useMemo(() => getImageUri(pinSource), [pinSource]);
-  const html = useMemo(() => buildMapHtml(pinUri, initialZoom, compact), [compact, initialZoom, pinUri]);
+  const html = useMemo(() => buildMapHtml(pinUri, initialZoom, compact, isDark), [compact, initialZoom, isDark, pinUri]);
 
   reportsRef.current = reports;
 
@@ -342,7 +351,7 @@ export function HazardMapView({
   }, [injectMapUpdate, mapReports, onMapPress, onMarkerPress, safeUserLocation]);
 
   return (
-    <View style={[styles.container, { height }]}>
+    <View style={[styles.container, { backgroundColor: colors.mapBackground, height }]}>
       <WebView
         ref={webViewRef}
         originWhitelist={['*']}
@@ -351,17 +360,17 @@ export function HazardMapView({
         domStorageEnabled
         scrollEnabled={false}
         onMessage={handleMessage}
-        style={styles.webView}
+        style={[styles.webView, { backgroundColor: colors.mapBackground }]}
       />
       {isLoading ? (
-        <View style={styles.overlay}>
-          <ActivityIndicator color={Colors.light.primary} />
-          <Text style={styles.overlayText}>Loading live hazards</Text>
+        <View style={[styles.overlay, { backgroundColor: isDark ? 'rgba(15, 23, 42, 0.82)' : 'rgba(255, 255, 255, 0.82)' }]}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={[styles.overlayText, { color: colors.primaryDark }]}>Loading live hazards</Text>
         </View>
       ) : null}
       {error ? (
-        <View style={styles.errorPill}>
-          <Text style={styles.errorText}>{error}</Text>
+        <View style={[styles.errorPill, { backgroundColor: colors.dangerSoft, borderColor: colors.danger }]}>
+          <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
         </View>
       ) : null}
     </View>
@@ -391,7 +400,6 @@ const styles = StyleSheet.create({
     top: 0,
   },
   overlayText: {
-    color: Colors.light.primaryDark,
     fontSize: 12,
     fontWeight: '800',
   },

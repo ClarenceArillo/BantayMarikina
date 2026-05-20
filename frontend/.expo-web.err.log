@@ -1,0 +1,65 @@
+The following packages should be updated for best compatibility with the installed expo version:
+  expo-clipboard@55.0.13 - expected version: ~8.0.8
+  expo-linear-gradient@55.0.14 - expected version: ~15.0.8
+Your project may not work correctly until you install the expected versions of the packages.
+"shadow*" style props are deprecated. Use "boxShadow".
+λ  WARN  Image: style.resizeMode is deprecated. Please use props.resizeMode. 
+  console.warn (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\expo\node_modules\@expo\cli\src\start\server\serverLogLikeMetro.ts:161:21)
+  warnOnce (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-native-web\dist\modules\warnOnce\index.js:24:13)
+  extractNonStandardStyleProps (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-native-web\dist\exports\Image\index.js:59:13)
+  Component (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-native-web\dist\exports\Image\index.js:181:31)
+  Object.callComponentInDEV [as react-stack-bottom-frame] (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:8970:18)
+  renderWithHooks (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:4699:19)
+  run (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:5539:39)
+  retryNode (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:5899:31)
+  renderNodeDestructive (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:5849:11)
+  renderNode (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:6306:18)
+"shadow*" style props are deprecated. Use "boxShadow".
+λ  WARN  Image: style.resizeMode is deprecated. Please use props.resizeMode. 
+  console.warn (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\expo\node_modules\@expo\cli\src\start\server\serverLogLikeMetro.ts:161:21)
+  warnOnce (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-native-web\dist\modules\warnOnce\index.js:24:13)
+  extractNonStandardStyleProps (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-native-web\dist\exports\Image\index.js:59:13)
+  Component (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-native-web\dist\exports\Image\index.js:181:31)
+  Object.callComponentInDEV [as react-stack-bottom-frame] (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:8970:18)
+  renderWithHooks (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:4699:19)
+  run (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:5539:39)
+  retryNode (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:5899:31)
+  renderNodeDestructive (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:5849:11)
+  renderNode (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:6306:18)
+Error: Premature close
+    at onclose (node:internal/streams/end-of-stream:162:30)
+    at processTicksAndRejections (node:internal/process/task_queues:85:11)
+"shadow*" style props are deprecated. Use "boxShadow".
+λ  WARN  Image: style.resizeMode is deprecated. Please use props.resizeMode. 
+  console.warn (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\expo\node_modules\@expo\cli\src\start\server\serverLogLikeMetro.ts:161:21)
+  warnOnce (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-native-web\dist\modules\warnOnce\index.js:24:13)
+  extractNonStandardStyleProps (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-native-web\dist\exports\Image\index.js:59:13)
+  Component (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-native-web\dist\exports\Image\index.js:181:31)
+  Object.callComponentInDEV [as react-stack-bottom-frame] (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:8970:18)
+  renderWithHooks (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:4699:19)
+  run (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:5539:39)
+  retryNode (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:5899:31)
+  renderNodeDestructive (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:5849:11)
+  renderNode (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\react-dom\cjs\react-dom-server-legacy.node.development.js:6306:18)
+C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\expo\node_modules\@expo\cli\build\src\utils\errors.js:130
+    throw error;
+    ^
+
+Error: ENOENT: no such file or directory, watch 'C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\@react-native-async-storage\.async-storage-yHkAHa8g\android\src\oldarch\asyncstorage'
+    at FSWatcher.<computed> (node:internal/fs/watchers:254:19)
+    at Object.watch (node:fs:2549:36)
+    at FallbackWatcher._watchdir (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\metro-file-map\src\watchers\FallbackWatcher.js:119:33)
+    at C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\metro-file-map\src\watchers\FallbackWatcher.js:219:22
+    at Walker.<anonymous> (C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\metro-file-map\src\watchers\FallbackWatcher.js:358:5)
+    at Walker.emit (node:events:519:28)
+    at C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\node_modules\walker\lib\walker.js:69:16
+    at FSReqCallback.oncomplete (node:fs:187:23)
+    at FSReqCallback.callbackTrampoline (node:internal/async_hooks:130:17) {
+  errno: -4058,
+  syscall: 'watch',
+  code: 'ENOENT',
+  path: 'C:\\Users\\CLARENCE\\OneDrive\\Tài liệu\\NU\\2nd Year\\3rd Term 2nd yr\\Database System\\Database Sytem Project\\frontend\\node_modules\\@react-native-async-storage\\.async-storage-yHkAHa8g\\android\\src\\oldarch\\asyncstorage',
+  filename: 'C:\\Users\\CLARENCE\\OneDrive\\Tài liệu\\NU\\2nd Year\\3rd Term 2nd yr\\Database System\\Database Sytem Project\\frontend\\node_modules\\@react-native-async-storage\\.async-storage-yHkAHa8g\\android\\src\\oldarch\\asyncstorage'
+}
+
+Node.js v22.20.0

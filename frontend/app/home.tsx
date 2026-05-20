@@ -1,9 +1,9 @@
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Pressable,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -12,13 +12,16 @@ import {
   View,
 } from 'react-native';
 import type { ImageSourcePropType, ImageStyle, StyleProp } from 'react-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 import { BottomNav } from '@/components/BottomNav';
+import { AppIcon, Badge, EmergencyCard, PressScale, RiskBanner, SectionHeader, SoftCard, ThemeToggle, useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
-import { Colors } from '@/constants/theme';
+import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuthSession } from '@/context/auth-context';
 import { useHazardReports } from '@/hooks/useHazardReports';
+import { useTheme } from '@/theme/useTheme';
 import {
   getDashboardSnapshot,
   refreshDashboardData,
@@ -30,22 +33,15 @@ import {
 } from '@/services/dashboardService';
 import type { HazardReport } from '@/types/hazard';
 
-const profileStatic = require('@/assets/statics/pfp.png');
+const defaultProfile = require('@/assets/Icons/Default Profile.png');
 const iconSources = {
   alert: require('@/assets/Icons/Alert.png'),
   bantayLogo: require('@/assets/Icons/BantayLogo.png'),
   cloudyDay: require('@/assets/Icons/CloudyDay.png'),
   evacuation: require('@/assets/Icons/Evacuation.png'),
-  home: require('@/assets/Icons/Home.png'),
-  homeActive: require('@/assets/Icons/Home (2).png'),
   hotline: require('@/assets/Icons/Hotline.png'),
-  map: require('@/assets/Icons/Map.png'),
   mapActive: require('@/assets/Icons/Map (2).png'),
-  notification: require('@/assets/Icons/Notification.png'),
-  notificationActive: require('@/assets/Icons/Notification (2).png'),
   pin: require('@/assets/Icons/Pin.png'),
-  profile: require('@/assets/Icons/Profile.png'),
-  profileActive: require('@/assets/Icons/Profile (2).png'),
   rainyDay: require('@/assets/Icons/RainyDay.png'),
   safetyTips: require('@/assets/Icons/SafetyTips.png'),
   sunnyDay: require('@/assets/Icons/SunnyDay.png'),
@@ -53,11 +49,11 @@ const iconSources = {
 };
 
 const statusPalette = {
-  Normal: { background: '#e4f8d9', foreground: '#538b3b', dot: '#589f39' },
-  Warning: { background: '#f8eab4', foreground: '#a79531', dot: '#a7942c' },
-  Critical: { background: '#f2c7c7', foreground: '#b13535', dot: '#b03535' },
-  Unavailable: { background: '#e7eaee', foreground: '#6a737d', dot: '#88929d' },
-};
+  Normal: { tone: 'green', dot: '#2e7d55' },
+  Warning: { tone: 'yellow', dot: '#b7791f' },
+  Critical: { tone: 'red', dot: '#c93535' },
+  Unavailable: { tone: 'neutral', dot: '#98a2b3' },
+} as const;
 
 function getFirstName(fullName: string) {
   const cleanName = fullName.trim();
@@ -71,8 +67,8 @@ function formatLevel(level: number | null) {
 
 function getSourceLabel(sourceStatus?: string) {
   if (!sourceStatus) return 'Cached';
-  if (sourceStatus === 'no_readings') return 'No Reading';
-  return sourceStatus === 'ok' ? 'Live' : 'Source Offline';
+  if (sourceStatus === 'no_readings') return 'No reading';
+  return sourceStatus === 'ok' ? 'Live' : 'Source offline';
 }
 
 function AssetIcon({
@@ -89,51 +85,28 @@ function AssetIcon({
 
 function getWeatherIcon(condition?: string) {
   const lower = condition?.toLowerCase() ?? '';
-  if (lower.includes('rain') || lower.includes('drizzle') || lower.includes('thunder')) {
-    return iconSources.rainyDay;
-  }
-  if (lower.includes('cloud') || lower.includes('overcast') || lower.includes('fog')) {
-    return iconSources.cloudyDay;
-  }
+  if (lower.includes('rain') || lower.includes('drizzle') || lower.includes('thunder')) return iconSources.rainyDay;
+  if (lower.includes('cloud') || lower.includes('overcast') || lower.includes('fog')) return iconSources.cloudyDay;
   return iconSources.sunnyDay;
 }
 
 function WeatherGlyph({ condition, small = false }: { condition?: string; small?: boolean }) {
   return (
-    <AssetIcon
-      source={getWeatherIcon(condition)}
-      style={small ? styles.weatherIconSmall : styles.weatherIconLarge}
-    />
+    <AssetIcon source={getWeatherIcon(condition)} style={small ? styles.weatherIconSmall : styles.weatherIconLarge} />
   );
 }
 
-function PinIcon({ color = '#d93a3a' }: { color?: string }) {
-  return (
-    <AssetIcon source={iconSources.pin} style={styles.pinIcon} tintColor={color} />
-  );
-}
-
-function SectionIcon({ type }: { type: 'water' | 'map' }) {
-  return <AssetIcon source={type === 'water' ? iconSources.water : iconSources.mapActive} style={styles.sectionIcon} />;
-}
-
-function ActionIcon({ type }: { type: 'evacuation' | 'hotlines' | 'tips' }) {
-  const sourceByType = {
-    evacuation: iconSources.evacuation,
-    hotlines: iconSources.hotline,
-    tips: iconSources.safetyTips,
-  };
-
-  return <AssetIcon source={sourceByType[type]} style={styles.actionIcon} />;
+function PinIcon({ color = Colors.light.danger }: { color?: string }) {
+  return <AssetIcon source={iconSources.pin} style={styles.pinIcon} tintColor={color} />;
 }
 
 function StatusBadge({ status }: { status: RiverStation['status'] }) {
   const palette = statusPalette[status as keyof typeof statusPalette] ?? statusPalette.Unavailable;
 
   return (
-    <View style={[styles.statusBadge, { backgroundColor: palette.background }]}>
+    <View style={styles.statusWrap}>
       <View style={[styles.statusDot, { backgroundColor: palette.dot }]} />
-      <Text style={[styles.statusText, { color: palette.foreground }]}>{status}</Text>
+      <Badge label={status} tone={palette.tone} style={styles.statusBadge} />
     </View>
   );
 }
@@ -149,33 +122,32 @@ function ForecastCard({ item }: { item: WeatherForecast }) {
 }
 
 function RiverRow({ station }: { station: RiverStation }) {
+  const theme = useAppTheme();
+
   return (
-    <View style={styles.riverRow}>
+    <View style={[styles.riverRow, { borderBottomColor: theme.borderSoft }]}>
       <View style={styles.stationCell}>
-        <PinIcon color="#2d75b4" />
-        <Text style={styles.stationName}>{station.station}</Text>
+        <PinIcon color={theme.primary} />
+        <Text style={[styles.stationName, { color: theme.text }]} numberOfLines={1}>{station.station}</Text>
       </View>
-      <Text style={styles.levelText}>{formatLevel(station.level)}</Text>
+      <Text style={[styles.levelText, { color: theme.text }]}>{formatLevel(station.level)} m</Text>
       <StatusBadge status={station.status} />
     </View>
   );
 }
 
+function SkeletonLine({ width = '100%' }: { width?: number | `${number}%` }) {
+  const theme = useAppTheme();
+  return <View style={[styles.skeletonLine, { backgroundColor: theme.borderSoft, width }]} />;
+}
+
 export default function HomeDashboard() {
-  const { session } = useAuthSession();
+  const theme = useAppTheme();
+  const { isDark } = useTheme();
+  const { profilePhotoUri, session } = useAuthSession();
   const params = useLocalSearchParams<{
     barangay?: string;
-    contactNumber?: string;
-    email?: string;
-    firstName?: string;
     fullName?: string;
-    gender?: string;
-    houseNumber?: string;
-    lastName?: string;
-    middleName?: string;
-    streetBlock?: string;
-    suffix?: string;
-    username?: string;
   }>();
   const fullName = session?.full_name || (typeof params.fullName === 'string' ? params.fullName : 'Juan De La Cruz');
   const barangay = session?.barangay || (typeof params.barangay === 'string' ? params.barangay : '');
@@ -186,14 +158,16 @@ export default function HomeDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
-  const {
-    reports: hazardReports,
-    isLoading: isMapLoading,
-    error: mapError,
-  } = useHazardReports(session?.idToken, 150);
+  const { reports: hazardReports, isLoading: isMapLoading, error: mapError } = useHazardReports(session?.idToken, 150);
 
   const displayName = useMemo(() => getFirstName(fullName), [fullName]);
   const openMap = useCallback(() => router.push('/map' as never), []);
+  const openHotlines = useCallback(() => router.push('/hotline' as never), []);
+  const emergencyLevel = useMemo(() => {
+    if ((waterLevel?.stations ?? []).some((station) => station.status === 'Critical')) return 'Critical';
+    if ((waterLevel?.stations ?? []).some((station) => station.status === 'Warning')) return 'Warning';
+    return 'Normal';
+  }, [waterLevel?.stations]);
 
   const refreshDashboard = useCallback(async () => {
     try {
@@ -225,54 +199,59 @@ export default function HomeDashboard() {
   }, []);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <ScrollView
         contentContainerStyle={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={isRefreshing} onRefresh={refreshDashboard} />
-        }>
-        <View style={styles.header}>
-          <Image source={iconSources.bantayLogo} style={styles.logoImage} resizeMode="contain" />
-          <View style={styles.headerCopy}>
-            <Text style={styles.welcome}>Welcome,</Text>
-            <Text style={styles.name}>{displayName}!</Text>
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refreshDashboard} tintColor={theme.primary} />}>
+        <Animated.View entering={FadeInUp.duration(420)} style={styles.header}>
+          <View style={styles.brandRow}>
+            <Image source={iconSources.bantayLogo} style={styles.logoImage} resizeMode="contain" />
+            <View style={styles.headerCopy}>
+              <Text style={[styles.welcome, { color: theme.muted }]}>Good day,</Text>
+              <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>{displayName}</Text>
+            </View>
           </View>
-          <Image source={profileStatic} style={styles.profileImage} />
-        </View>
+          <View style={styles.headerActions}>
+            <ThemeToggle />
+            <Image source={profilePhotoUri ? { uri: profilePhotoUri } : defaultProfile} style={[styles.profileImage, { borderColor: theme.borderSoft }]} />
+          </View>
+        </Animated.View>
+
+        <RiskBanner
+          level={emergencyLevel}
+          title={`${emergencyLevel} emergency level`}
+          message="Live city conditions are monitored for floods, weather, and active hazards."
+        />
 
         <View style={styles.quickActions}>
-          <Pressable style={[styles.actionPill, styles.evacPill]}>
-            <ActionIcon type="evacuation" />
-            <Text style={styles.actionText}>Evacuation</Text>
-          </Pressable>
-          <Pressable style={[styles.actionPill, styles.hotlinePill]}>
-            <ActionIcon type="hotlines" />
-            <Text style={styles.actionText}>Hotlines</Text>
-          </Pressable>
-          <Pressable style={[styles.actionPill, styles.tipsPill]}>
-            <ActionIcon type="tips" />
-            <Text style={styles.actionText}>Safety Tips</Text>
-          </Pressable>
+          <QuickAction icon={iconSources.evacuation} label="Evacuation" tone="red" />
+          <QuickAction icon={iconSources.hotline} label="Hotlines" tone="orange" onPress={openHotlines} />
+          <QuickAction icon={iconSources.safetyTips} label="Safety Tips" tone="yellow" />
         </View>
 
         {error ? (
-          <Pressable style={styles.errorBanner} onPress={refreshDashboard}>
-            <Text style={styles.errorTitle}>Live data unavailable</Text>
-            <Text style={styles.errorMessage}>{error}. Tap to retry.</Text>
-          </Pressable>
+          <PressScale style={[styles.errorBanner, { backgroundColor: theme.dangerSoft }]} onPress={refreshDashboard}>
+            <Text style={[styles.errorTitle, { color: theme.danger }]}>Live data unavailable</Text>
+            <Text style={[styles.errorMessage, { color: theme.muted }]}>{error}. Tap to retry.</Text>
+          </PressScale>
         ) : null}
 
-        <View style={styles.weatherPanel}>
+        <EmergencyCard colors={isDark ? ['#153d61', '#215582', '#0f172a'] : ['#153d61', '#215582', '#43a0c7']} delay={80} style={styles.weatherPanel}>
           {isLoading && !weather ? (
-            <ActivityIndicator color="#fff" />
+            <View style={styles.weatherSkeleton}>
+              <ActivityIndicator color="#fff" />
+              <SkeletonLine width="48%" />
+              <SkeletonLine width="74%" />
+            </View>
           ) : (
             <>
               <View style={styles.weatherTop}>
-                <View>
-                  <Text style={styles.todayLabel}>TODAY</Text>
+                <View style={styles.weatherLeft}>
+                  <Text style={styles.todayLabel}>MARIKINA TODAY</Text>
                   <WeatherGlyph condition={weather?.condition} />
                   <View style={styles.locationRow}>
-                    <PinIcon color="#ffebeb" />
+                    <PinIcon color="#eaf6ff" />
                     <Text style={styles.locationText}>{weather?.location ?? 'Marikina City'}</Text>
                   </View>
                 </View>
@@ -280,68 +259,83 @@ export default function HomeDashboard() {
                   <Text style={styles.weatherDate}>{weather?.date ?? 'Today'}</Text>
                   <Text style={styles.temperature}>{weather?.temperature ?? '--'}{'\u00b0'}</Text>
                   <Text style={styles.condition}>{weather?.condition ?? 'Loading weather'}</Text>
-                  <Text style={styles.weatherMeta}>
-                    H {weather?.humidity ?? '--'}%  W {weather?.windspeed ?? '--'} km/h
-                  </Text>
+                  <Text style={styles.weatherMeta}>Humidity {weather?.humidity ?? '--'}%  Wind {weather?.windspeed ?? '--'} km/h</Text>
                 </View>
               </View>
 
               <View style={styles.forecastRow}>
-                {(weather?.forecast ?? []).map((item) => (
+                {(weather?.forecast ?? []).slice(0, 3).map((item) => (
                   <ForecastCard key={item.day} item={item} />
                 ))}
               </View>
             </>
           )}
-        </View>
+        </EmergencyCard>
 
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardTitleRow}>
-              <SectionIcon type="water" />
-              <Text style={styles.cardTitle}>River Water Level</Text>
-            </View>
-            {waterLevel?.updated_at || waterLevel?.last_checked_at ? (
-              <Text style={styles.updatedText}>{getSourceLabel(waterLevel.source_status)}</Text>
-            ) : null}
-          </View>
+        <SoftCard delay={120}>
+          <SectionHeader
+            icon={iconSources.water}
+            title="River Water Level"
+            subtitle="Fast scan of monitored stations"
+            action={waterLevel?.updated_at || waterLevel?.last_checked_at ? <Badge label={getSourceLabel(waterLevel.source_status)} /> : null}
+          />
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeadText, styles.stationColumn]}>STATION</Text>
-            <Text style={styles.tableHeadText}>LEVEL</Text>
-            <Text style={styles.tableHeadText}>STATUS</Text>
+            <Text style={[styles.tableHeadText, styles.stationColumn, { color: theme.muted }]}>Station</Text>
+            <Text style={[styles.tableHeadText, { color: theme.muted }]}>Level</Text>
+            <Text style={[styles.tableHeadText, { color: theme.muted }]}>Status</Text>
           </View>
           {isLoading && !waterLevel ? (
-            <ActivityIndicator color={Colors.light.primary} style={styles.inlineLoader} />
-          ) : (
-            (waterLevel?.stations ?? []).map((station) => (
-              <RiverRow key={station.station} station={station} />
-            ))
-          )}
-        </View>
-
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardTitleRow}>
-              <SectionIcon type="map" />
-              <Text style={styles.cardTitle}>Live Map</Text>
+            <View style={styles.inlineSkeleton}>
+              <SkeletonLine />
+              <SkeletonLine width="82%" />
+              <SkeletonLine width="68%" />
             </View>
-            <Pressable onPress={openMap}>
-              <Text style={styles.mapLink}>View Full Map</Text>
-            </Pressable>
-          </View>
-          <HazardMapView
-            reports={hazardReports}
-            pinSource={iconSources.pin}
-            isLoading={isMapLoading}
-            error={mapError}
-            height={321}
-            compact
-            onMarkerPress={setSelectedReport}
-            onMapPress={openMap}
-          />
-        </View>
+          ) : (
+            (waterLevel?.stations ?? []).map((station) => <RiverRow key={station.station} station={station} />)
+          )}
+        </SoftCard>
 
-        <Text style={styles.footerHint}>{barangay ? `${barangay} resident dashboard` : 'Marikina resident dashboard'}</Text>
+        <SoftCard delay={160} style={styles.mapCard}>
+          <SectionHeader
+            icon={iconSources.mapActive}
+            title="Live Hazard Map"
+            subtitle={`${hazardReports.length} active reports nearby`}
+            action={
+              <PressScale onPress={openMap} style={[styles.viewButton, { backgroundColor: theme.primaryTint }]}>
+                <Text style={[styles.viewButtonText, { color: theme.primary }]}>Open</Text>
+              </PressScale>
+            }
+          />
+          <View style={styles.mapPreview}>
+            <HazardMapView
+              reports={hazardReports}
+              pinSource={iconSources.pin}
+              isLoading={isMapLoading}
+              error={mapError}
+              height={300}
+              compact
+              onMarkerPress={setSelectedReport}
+              onMapPress={openMap}
+            />
+          </View>
+        </SoftCard>
+
+        <PressScale onPress={openHotlines} style={styles.hotlineAccess}>
+          <LinearGradient colors={isDark ? ['#111827', '#1e293b'] : ['#fff5f5', '#f1f7fc']} style={[styles.hotlineAccessGradient, { borderColor: theme.borderSoft }]}>
+            <View style={[styles.hotlineIcon, { backgroundColor: theme.surface }]}>
+              <AppIcon source={iconSources.hotline} size={24} />
+            </View>
+            <View style={styles.hotlineCopy}>
+              <Text style={[styles.hotlineTitle, { color: theme.text }]}>Emergency Hotlines</Text>
+              <Text style={[styles.hotlineSubtitle, { color: theme.muted }]}>Marikina Rescue and office contacts</Text>
+            </View>
+            <Badge label="8-161" tone="red" />
+          </LinearGradient>
+        </PressScale>
+
+        <Text style={[styles.footerHint, { color: theme.muted }]}>
+          {barangay ? `${barangay} resident dashboard` : 'Marikina resident dashboard'}
+        </Text>
       </ScrollView>
 
       <BottomNav activeTab="home" />
@@ -350,276 +344,321 @@ export default function HomeDashboard() {
   );
 }
 
+function QuickAction({
+  icon,
+  label,
+  tone,
+  onPress,
+}: {
+  icon: ImageSourcePropType;
+  label: string;
+  tone: 'red' | 'orange' | 'yellow';
+  onPress?: () => void;
+}) {
+  const theme = useAppTheme();
+  const tones = {
+    red: [theme.dangerSoft, theme.danger],
+    orange: [theme.orangeSoft, theme.orange],
+    yellow: [theme.warningSoft, theme.warning],
+  } as const;
+  const [backgroundColor, color] = tones[tone];
+
+  return (
+    <Animated.View entering={FadeInDown.duration(420)} style={styles.actionWrap}>
+      <PressScale onPress={onPress} style={[styles.actionPill, { backgroundColor }]}>
+        <AppIcon source={icon} size={22} />
+        <Text style={[styles.actionText, { color }]}>{label}</Text>
+      </PressScale>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#fff',
   },
   content: {
-    paddingHorizontal: 26,
-    paddingTop: 28,
-    paddingBottom: 104,
-    gap: 18,
+    gap: Spacing.xl,
+    paddingBottom: 114,
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.xxl,
   },
   header: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-between',
+  },
+  brandRow: {
+    alignItems: 'center',
+    flex: 1,
+    flexDirection: 'row',
+    gap: Spacing.md,
   },
   logoImage: {
-    height: 64,
-    width: 64,
+    height: 58,
+    width: 58,
   },
   headerCopy: {
     flex: 1,
   },
+  headerActions: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: Spacing.sm,
+  },
   welcome: {
-    color: '#060606',
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: Typography.body,
+    fontWeight: '800',
   },
   name: {
-    color: Colors.light.primary,
-    fontSize: 21,
-    fontWeight: '700',
+    fontSize: Typography.headline,
+    fontWeight: '900',
+    letterSpacing: 0,
   },
   profileImage: {
     borderRadius: 24,
+    borderWidth: 2,
     height: 48,
     width: 48,
   },
   quickActions: {
     flexDirection: 'row',
-    gap: 9,
+    gap: Spacing.md,
+  },
+  actionWrap: {
+    flex: 1,
   },
   actionPill: {
     alignItems: 'center',
-    borderRadius: 20,
-    borderWidth: 1,
-    flex: 1,
-    flexDirection: 'row',
-    gap: 7,
-    height: 40,
+    borderRadius: Radius.lg,
+    flexDirection: 'column',
+    gap: Spacing.sm,
+    height: 82,
     justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  evacPill: {
-    backgroundColor: 'rgba(209, 65, 65, 0.14)',
-    borderColor: 'rgba(209, 65, 65, 0.6)',
-  },
-  hotlinePill: {
-    backgroundColor: 'rgba(255, 173, 80, 0.27)',
-    borderColor: '#ffad50',
-  },
-  tipsPill: {
-    backgroundColor: 'rgba(238, 201, 30, 0.13)',
-    borderColor: 'rgba(238, 201, 30, 0.57)',
+    paddingHorizontal: Spacing.sm,
   },
   actionText: {
-    color: '#111',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: Typography.caption,
+    fontWeight: '900',
+    textAlign: 'center',
   },
   errorBanner: {
-    backgroundColor: '#fff3f3',
-    borderColor: '#f1b2b2',
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 12,
+    borderRadius: Radius.lg,
+    padding: Spacing.lg,
   },
   errorTitle: {
-    color: '#a63a3a',
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: Typography.body,
+    fontWeight: '900',
   },
   errorMessage: {
-    color: '#7a4b4b',
-    fontSize: 11,
-    marginTop: 3,
+    fontSize: Typography.caption,
+    fontWeight: '700',
+    marginTop: 4,
   },
   weatherPanel: {
-    backgroundColor: Colors.light.primary,
-    borderRadius: 10,
-    elevation: 4,
-    minHeight: 286,
-    padding: 18,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 4,
+    minHeight: 292,
+  },
+  weatherSkeleton: {
+    gap: Spacing.md,
+    minHeight: 220,
+    justifyContent: 'center',
   },
   weatherTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
+  weatherLeft: {
+    flex: 0.9,
+  },
   todayLabel: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
-    marginBottom: 10,
-    textAlign: 'center',
+    color: '#ffffff',
+    fontSize: Typography.caption,
+    fontWeight: '900',
+    letterSpacing: 0,
+    marginBottom: Spacing.md,
   },
   locationRow: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 5,
-    marginTop: 8,
+    gap: 6,
+    marginTop: Spacing.sm,
   },
   locationText: {
-    color: '#ffebeb',
-    fontSize: 12,
-    fontWeight: '600',
+    color: '#eaf6ff',
+    flex: 1,
+    fontSize: Typography.caption,
+    fontWeight: '800',
   },
   currentWeather: {
-    alignItems: 'center',
-    paddingTop: 2,
+    alignItems: 'flex-end',
+    flex: 1,
   },
   weatherDate: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
+    color: '#ffffff',
+    fontSize: Typography.body,
+    fontWeight: '800',
   },
   temperature: {
-    color: '#fff',
-    fontSize: 64,
-    fontWeight: '600',
-    lineHeight: 76,
+    color: '#ffffff',
+    fontSize: 62,
+    fontWeight: '800',
+    lineHeight: 72,
   },
   condition: {
-    color: '#ffebeb',
-    fontSize: 11,
-    fontWeight: '600',
+    color: '#eaf6ff',
+    fontSize: Typography.body,
+    fontWeight: '800',
+    textAlign: 'right',
   },
   weatherMeta: {
-    color: '#d8ecff',
-    fontSize: 10,
-    marginTop: 6,
+    color: 'rgba(255,255,255,0.76)',
+    fontSize: Typography.caption,
+    fontWeight: '700',
+    marginTop: Spacing.sm,
+    textAlign: 'right',
   },
   forecastRow: {
     flexDirection: 'row',
-    gap: 12,
-    justifyContent: 'center',
-    marginTop: 18,
+    gap: Spacing.md,
+    marginTop: Spacing.xl,
   },
   forecastCard: {
     alignItems: 'center',
-    backgroundColor: 'rgba(229, 229, 229, 0.12)',
-    borderRadius: 5,
-    height: 117,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderColor: 'rgba(255,255,255,0.16)',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    flex: 1,
     justifyContent: 'space-between',
-    paddingVertical: 7,
-    width: 79,
+    minHeight: 112,
+    paddingVertical: Spacing.md,
   },
   forecastTemp: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: '500',
+    color: '#ffffff',
+    fontSize: Typography.title,
+    fontWeight: '900',
   },
   forecastDay: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  card: {
-    backgroundColor: '#fafafa',
-    borderRadius: 10,
-    elevation: 4,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 4,
-  },
-  cardHeader: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  cardTitleRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  cardTitle: {
-    color: '#000',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  updatedText: {
-    color: Colors.light.primary,
-    fontSize: 10,
-    fontWeight: '800',
+    color: '#ffffff',
+    fontSize: Typography.body,
+    fontWeight: '900',
   },
   tableHeader: {
-    alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginTop: Spacing.lg,
+    paddingBottom: Spacing.sm,
   },
   tableHeadText: {
-    color: Colors.light.primary,
-    fontSize: 10,
-    fontWeight: '800',
-    width: 72,
+    fontSize: Typography.caption,
+    fontWeight: '900',
+    textTransform: 'uppercase',
+    width: 82,
   },
   stationColumn: {
     flex: 1,
   },
-  inlineLoader: {
-    paddingVertical: 28,
+  inlineSkeleton: {
+    gap: Spacing.md,
+    paddingVertical: Spacing.lg,
+  },
+  skeletonLine: {
+    borderRadius: Radius.pill,
+    height: 14,
   },
   riverRow: {
     alignItems: 'center',
-    borderBottomColor: 'rgba(217, 217, 217, 0.65)',
     borderBottomWidth: 1,
     flexDirection: 'row',
-    minHeight: 28,
-    paddingVertical: 5,
+    minHeight: 48,
+    paddingVertical: Spacing.sm,
   },
   stationCell: {
     alignItems: 'center',
     flex: 1,
     flexDirection: 'row',
-    gap: 8,
+    gap: Spacing.sm,
   },
   stationName: {
-    color: '#000',
-    fontSize: 10,
+    flex: 1,
+    fontSize: Typography.body,
+    fontWeight: '800',
   },
   levelText: {
-    color: '#000',
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'left',
-    width: 72,
+    fontSize: Typography.body,
+    fontWeight: '900',
+    width: 82,
   },
-  statusBadge: {
+  statusWrap: {
     alignItems: 'center',
-    borderRadius: 10,
     flexDirection: 'row',
     gap: 6,
-    height: 18,
-    justifyContent: 'center',
-    width: 78,
+    width: 96,
   },
   statusDot: {
-    borderRadius: 4,
-    height: 7,
-    width: 7,
+    borderRadius: 5,
+    height: 10,
+    width: 10,
   },
-  statusText: {
-    fontSize: 9,
-    fontWeight: '800',
+  statusBadge: {
+    flex: 1,
+    minHeight: 28,
+    paddingHorizontal: 0,
   },
-  mapLink: {
-    color: '#215582',
-    fontSize: 9,
-    fontWeight: '800',
+  mapCard: {
+    overflow: 'hidden',
+    paddingBottom: Spacing.lg,
+  },
+  viewButton: {
+    alignItems: 'center',
+    borderRadius: Radius.pill,
+    height: 36,
+    justifyContent: 'center',
+    paddingHorizontal: Spacing.lg,
+  },
+  viewButtonText: {
+    fontSize: Typography.body,
+    fontWeight: '900',
+  },
+  mapPreview: {
+    borderRadius: Radius.lg,
+    marginTop: Spacing.lg,
+    overflow: 'hidden',
+  },
+  hotlineAccess: {
+    borderRadius: Radius.xl,
+  },
+  hotlineAccessGradient: {
+    alignItems: 'center',
+    borderRadius: Radius.xl,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: Spacing.md,
+    minHeight: 78,
+    padding: Spacing.lg,
+  },
+  hotlineIcon: {
+    alignItems: 'center',
+    borderRadius: Radius.md,
+    height: 46,
+    justifyContent: 'center',
+    width: 46,
+  },
+  hotlineCopy: {
+    flex: 1,
+  },
+  hotlineTitle: {
+    fontSize: Typography.bodyLarge,
+    fontWeight: '900',
+  },
+  hotlineSubtitle: {
+    fontSize: Typography.caption,
+    fontWeight: '700',
+    marginTop: 3,
   },
   footerHint: {
-    color: Colors.light.muted,
-    fontSize: 11,
+    fontSize: Typography.caption,
+    fontWeight: '700',
     textAlign: 'center',
   },
   weatherIconLarge: {
@@ -633,13 +672,5 @@ const styles = StyleSheet.create({
   pinIcon: {
     height: 17,
     width: 11,
-  },
-  sectionIcon: {
-    height: 20,
-    width: 20,
-  },
-  actionIcon: {
-    height: 18,
-    width: 18,
   },
 });

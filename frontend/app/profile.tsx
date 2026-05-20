@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 
 import { BottomNav } from '@/components/BottomNav';
-import { Colors } from '@/constants/theme';
+import { useAppTheme } from '@/components/EmergencyUI';
 import { useAuthSession } from '@/context/auth-context';
 import {
   getCurrentUserProfile,
@@ -24,7 +24,7 @@ import {
 } from '@/services/authService';
 
 const logo = require('@/assets/Logo/BantayMarikinaLogo.png');
-const defaultProfile = require('@/assets/statics/pfp.png');
+const defaultProfile = require('@/assets/Icons/Default Profile.png');
 const cameraIcon = require('@/assets/Icons/Camera.png');
 const penIcon = require('@/assets/Icons/Pen.png');
 
@@ -80,9 +80,11 @@ function ProfileField({
   required?: boolean;
   value: string;
 }) {
+  const theme = useAppTheme();
+
   return (
     <View style={styles.fieldGroup}>
-      <Text style={styles.label}>
+      <Text style={[styles.label, { color: theme.text }]}>
         {label}
         {required ? <Text style={styles.required}> *</Text> : null}
       </Text>
@@ -90,8 +92,15 @@ function ProfileField({
         editable={editable}
         keyboardType={keyboardType}
         onChangeText={onChangeText}
-        placeholderTextColor="#8a8a8a"
-        style={[styles.input, editable ? styles.inputEditable : styles.inputLocked]}
+        placeholderTextColor={theme.placeholder}
+        style={[
+          styles.input,
+          {
+            backgroundColor: editable ? theme.surface : theme.input,
+            borderColor: editable ? theme.primary : theme.border,
+            color: theme.text,
+          },
+        ]}
         value={value}
       />
     </View>
@@ -99,18 +108,18 @@ function ProfileField({
 }
 
 export default function ProfileScreen() {
-  const { session, updateSessionProfile } = useAuthSession();
+  const theme = useAppTheme();
+  const { profilePhotoUri, session, setProfilePhotoUri, updateSessionProfile } = useAuthSession();
   const idToken = session?.idToken ?? '';
   const fallbackName = session?.full_name ?? '';
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [photoUri, setPhotoUri] = useState('');
   const [form, setForm] = useState<ProfileForm>(() => toForm());
   const [error, setError] = useState('');
 
   const fullName = useMemo(() => buildFullName(form, fallbackName), [fallbackName, form]);
-  const profileSource: ImageSourcePropType = photoUri ? { uri: photoUri } : defaultProfile;
+  const profileSource: ImageSourcePropType = profilePhotoUri ? { uri: profilePhotoUri } : defaultProfile;
 
   const updateField = (field: keyof ProfileForm) => (value: string) => {
     setForm((current) => ({ ...current, [field]: value }));
@@ -155,7 +164,7 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
-      setPhotoUri(result.assets[0].uri);
+      setProfilePhotoUri(result.assets[0].uri);
     }
   };
 
@@ -195,32 +204,32 @@ export default function ProfileScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Image source={logo} style={styles.logo} resizeMode="contain" />
 
         <View style={styles.profileHeader}>
           <View style={styles.photoWrap}>
-            <Image source={profileSource} style={styles.profilePhoto} resizeMode="cover" />
-            <Pressable style={styles.photoButton} onPress={pickProfilePhoto}>
+            <Image source={profileSource} style={[styles.profilePhoto, { backgroundColor: theme.surfaceMuted, borderColor: theme.borderSoft }]} resizeMode="cover" />
+            <Pressable style={[styles.photoButton, { backgroundColor: theme.primary, borderColor: theme.background }]} onPress={pickProfilePhoto}>
               <Image source={cameraIcon} style={styles.photoButtonIcon} resizeMode="contain" />
             </Pressable>
           </View>
-          <Text style={styles.fullName}>{fullName}</Text>
+          <Text style={[styles.fullName, { color: theme.text }]}>{fullName}</Text>
         </View>
 
         <Pressable style={styles.editButton} onPress={saveProfile} disabled={isSaving || isLoading}>
-          <Image source={penIcon} style={styles.editIcon} resizeMode="contain" />
-          <Text style={styles.editText}>{isEditing ? 'Save' : 'Edit'}</Text>
+          <Image source={penIcon} style={[styles.editIcon, { tintColor: theme.primary }]} resizeMode="contain" />
+          <Text style={[styles.editText, { color: theme.primary }]}>{isEditing ? 'Save' : 'Edit'}</Text>
         </Pressable>
 
         {isLoading ? (
-          <ActivityIndicator color={Colors.light.primary} style={styles.loader} />
+          <ActivityIndicator color={theme.primary} style={styles.loader} />
         ) : (
           <>
             {error ? (
-              <Pressable style={styles.errorBox} onPress={loadProfile}>
-                <Text style={styles.errorText}>{error} Tap to retry.</Text>
+              <Pressable style={[styles.errorBox, { backgroundColor: theme.dangerSoft, borderColor: theme.danger }]} onPress={loadProfile}>
+                <Text style={[styles.errorText, { color: theme.danger }]}>{error} Tap to retry.</Text>
               </Pressable>
             ) : null}
 
@@ -251,7 +260,7 @@ export default function ProfileScreen() {
               <ProfileField editable={isEditing} label="House Number" onChangeText={updateField('houseNumber')} required value={form.houseNumber} />
             </View>
 
-            <Pressable style={styles.nextButton} onPress={saveProfile} disabled={isSaving}>
+            <Pressable style={[styles.nextButton, { backgroundColor: theme.primary }]} onPress={saveProfile} disabled={isSaving}>
               <Text style={styles.nextText}>{isSaving ? 'Saving...' : isEditing ? 'Save' : 'Next'}</Text>
             </Pressable>
           </>
@@ -265,7 +274,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#fff',
     flex: 1,
   },
   content: {
@@ -287,15 +295,13 @@ const styles = StyleSheet.create({
     width: 98,
   },
   profilePhoto: {
-    backgroundColor: '#f2f2f2',
+    borderWidth: 1,
     borderRadius: 49,
     height: 98,
     width: 98,
   },
   photoButton: {
     alignItems: 'center',
-    backgroundColor: Colors.light.primary,
-    borderColor: '#fff',
     borderRadius: 17,
     borderWidth: 3,
     bottom: 2,
@@ -311,7 +317,6 @@ const styles = StyleSheet.create({
     width: 17,
   },
   fullName: {
-    color: '#000',
     fontSize: 18,
     fontWeight: '800',
     marginTop: 10,
@@ -327,11 +332,9 @@ const styles = StyleSheet.create({
   },
   editIcon: {
     height: 16,
-    tintColor: '#215582',
     width: 16,
   },
   editText: {
-    color: '#215582',
     fontSize: 15,
     fontWeight: '600',
   },
@@ -339,15 +342,12 @@ const styles = StyleSheet.create({
     marginTop: 36,
   },
   errorBox: {
-    backgroundColor: '#fff3f3',
-    borderColor: '#f1b2b2',
     borderRadius: 8,
     borderWidth: 1,
     marginTop: 8,
     padding: 10,
   },
   errorText: {
-    color: '#9f3434',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -359,7 +359,6 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   label: {
-    color: '#000',
     fontSize: 14,
     fontWeight: '800',
   },
@@ -367,24 +366,14 @@ const styles = StyleSheet.create({
     color: '#f03a3a',
   },
   input: {
-    borderColor: '#ededed',
     borderRadius: 14,
     borderWidth: 1,
-    color: '#111',
     fontSize: 18,
     height: 80,
     paddingHorizontal: 20,
   },
-  inputLocked: {
-    backgroundColor: '#fafafa',
-  },
-  inputEditable: {
-    backgroundColor: '#fff',
-    borderColor: Colors.light.primary,
-  },
   nextButton: {
     alignItems: 'center',
-    backgroundColor: Colors.light.primary,
     borderRadius: 4,
     height: 42,
     justifyContent: 'center',

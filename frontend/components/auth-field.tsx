@@ -1,6 +1,6 @@
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useAppTheme } from '@/components/EmergencyUI';
 
 type AuthFieldProps = TextInputProps & {
   error?: string;
@@ -17,17 +17,20 @@ export function AuthField({
   style,
   ...inputProps
 }: AuthFieldProps) {
+  const theme = useAppTheme();
+
   return (
     <View style={styles.group}>
       <View style={styles.labelRow}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={[styles.label, { color: theme.text }]}>{label}</Text>
         {required ? <Text style={styles.requiredMark}>*</Text> : null}
       </View>
-      <View style={[styles.inputWrap, error ? styles.inputWrapError : undefined]}>
+      <View style={[styles.inputWrap, { backgroundColor: theme.input, borderColor: error ? theme.danger : theme.border }]}>
         <TextInput
-          placeholderTextColor={Colors.light.placeholder}
+          placeholderTextColor={theme.placeholder}
           style={[
             styles.input,
+            { color: theme.text },
             rightElement ? styles.inputWithIcon : undefined,
             style,
           ]}
@@ -35,7 +38,7 @@ export function AuthField({
         />
         {rightElement ? <View style={styles.rightElement}>{rightElement}</View> : null}
       </View>
-      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+      {error ? <Text style={[styles.errorText, { color: theme.danger }]}>{error}</Text> : null}
     </View>
   );
 }
@@ -51,7 +54,6 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   label: {
-    color: Colors.light.black,
     fontSize: 17,
     fontWeight: '500',
   },
@@ -59,18 +61,11 @@ const styles = StyleSheet.create({
     height: 51,
     justifyContent: 'center',
     borderWidth: 0.5,
-    borderColor: Colors.light.border,
     borderRadius: 10,
-    backgroundColor: Colors.light.input,
-  },
-  inputWrapError: {
-    borderColor: '#d53939',
-    borderWidth: 1,
   },
   input: {
     height: '100%',
     paddingHorizontal: 13,
-    color: Colors.light.black,
     fontSize: 15,
     fontWeight: '300',
   },
@@ -83,12 +78,10 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   requiredMark: {
-    color: '#d53939',
     fontSize: 18,
     fontWeight: '700',
   },
   errorText: {
-    color: '#d53939',
     fontSize: 12,
     fontWeight: '500',
     marginTop: -3,

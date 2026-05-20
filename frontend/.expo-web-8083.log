@@ -1,0 +1,9 @@
+
+> bantay-marikina-frontend@1.0.0 web
+> expo start --web --port 8083
+
+env: load .env
+env: export EXPO_PUBLIC_API_URL EXPO_PUBLIC_FIREBASE_API_KEY EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN EXPO_PUBLIC_FIREBASE_PROJECT_ID EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET
+Starting project at C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend
+› Port 8083 is being used by another process
+› Skipping dev server

@@ -15,8 +15,8 @@ import {
 } from 'react-native';
 
 import { BottomNav } from '@/components/BottomNav';
+import { useAppTheme } from '@/components/EmergencyUI';
 import { HazardMapView } from '@/components/HazardMapView';
-import { Colors } from '@/constants/theme';
 import { useAuthSession } from '@/context/auth-context';
 import { useLiveLocation } from '@/hooks/useLiveLocation';
 import { ensureFirebaseSession } from '@/services/firebaseSession';
@@ -30,6 +30,7 @@ const iconSources = {
 };
 
 export default function ReportScreen() {
+  const theme = useAppTheme();
   const { session } = useAuthSession();
   const { location, isLocating, error: locationError, locateOnce } = useLiveLocation(true);
   const [hazardType, setHazardType] = useState<HazardType>('Flood');
@@ -100,15 +101,15 @@ export default function ReportScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <Image source={iconSources.arrow} style={styles.backIcon} resizeMode="contain" />
+          <Pressable style={[styles.backButton, { backgroundColor: theme.primaryTint }]} onPress={() => router.back()}>
+            <Image source={iconSources.arrow} style={[styles.backIcon, { tintColor: theme.primary }]} resizeMode="contain" />
           </Pressable>
           <View>
-            <Text style={styles.title}>Report Hazard</Text>
-            <Text style={styles.subtitle}>GPS location is attached automatically</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Report Hazard</Text>
+            <Text style={[styles.subtitle, { color: theme.muted }]}>GPS location is attached automatically</Text>
           </View>
         </View>
 
@@ -123,81 +124,81 @@ export default function ReportScreen() {
           compact
         />
 
-        <View style={styles.locationPanel}>
+        <View style={[styles.locationPanel, { backgroundColor: theme.primaryTint, borderColor: theme.borderSoft }]}>
           <View>
-            <Text style={styles.panelLabel}>Current Location</Text>
-            <Text style={styles.locationText}>
+            <Text style={[styles.panelLabel, { color: theme.primaryDark }]}>Current Location</Text>
+            <Text style={[styles.locationText, { color: theme.text }]}>
               {userLocation
                 ? `${userLocation.latitude.toFixed(5)}, ${userLocation.longitude.toFixed(5)}`
                 : 'Waiting for GPS signal'}
             </Text>
-            <Text style={styles.accuracyText}>
+            <Text style={[styles.accuracyText, { color: theme.muted }]}>
               {userLocation?.accuracy ? `Accuracy: about ${Math.round(userLocation.accuracy)}m` : barangay || 'Marikina City'}
             </Text>
           </View>
-          <Pressable style={styles.locateButton} onPress={() => locateOnce().catch(() => undefined)}>
+          <Pressable style={[styles.locateButton, { backgroundColor: theme.primary }]} onPress={() => locateOnce().catch(() => undefined)}>
             <Text style={styles.locateText}>Locate</Text>
           </Pressable>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Hazard Type</Text>
+          <Text style={[styles.label, { color: theme.text }]}>Hazard Type</Text>
           <View style={styles.chipGrid}>
             {HAZARD_TYPES.map((type) => (
               <Pressable
                 key={type}
-                style={[styles.chip, hazardType === type ? styles.chipActive : null]}
+                style={[styles.chip, { backgroundColor: theme.surfaceMuted, borderColor: theme.border }, hazardType === type ? { backgroundColor: theme.primaryTint, borderColor: theme.primary } : null]}
                 onPress={() => setHazardType(type)}>
-                <Text style={[styles.chipText, hazardType === type ? styles.chipTextActive : null]}>{type}</Text>
+                <Text style={[styles.chipText, { color: hazardType === type ? theme.primaryDark : theme.muted }]}>{type}</Text>
               </Pressable>
             ))}
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Severity</Text>
-          <View style={styles.segmentRow}>
+          <Text style={[styles.label, { color: theme.text }]}>Severity</Text>
+          <View style={[styles.segmentRow, { backgroundColor: theme.surfaceMuted }]}>
             {SEVERITY_LEVELS.map((level) => (
               <Pressable
                 key={level}
-                style={[styles.segment, severity === level ? styles.segmentActive : null]}
+                style={[styles.segment, severity === level ? { backgroundColor: theme.surface, shadowColor: theme.black } : null]}
                 onPress={() => setSeverity(level)}>
-                <Text style={[styles.segmentText, severity === level ? styles.segmentTextActive : null]}>{level}</Text>
+                <Text style={[styles.segmentText, { color: severity === level ? theme.primary : theme.muted }]}>{level}</Text>
               </Pressable>
             ))}
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Description</Text>
+          <Text style={[styles.label, { color: theme.text }]}>Description</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder="Example: Waist-level flood near the bridge"
-            placeholderTextColor={Colors.light.placeholder}
+            placeholderTextColor={theme.placeholder}
             multiline
             maxLength={240}
-            style={styles.descriptionInput}
+            style={[styles.descriptionInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.text }]}
           />
-          <Text style={styles.counter}>{description.length}/240</Text>
+          <Text style={[styles.counter, { color: theme.muted }]}>{description.length}/240</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>Optional Image</Text>
-          <Pressable style={styles.imagePicker} onPress={pickImage}>
+          <Text style={[styles.label, { color: theme.text }]}>Optional Image</Text>
+          <Pressable style={[styles.imagePicker, { backgroundColor: theme.input, borderColor: theme.border }]} onPress={pickImage}>
             {imageUri ? (
               <Image source={{ uri: imageUri }} style={styles.previewImage} />
             ) : (
               <>
-                <Image source={iconSources.camera} style={styles.cameraIcon} resizeMode="contain" />
-                <Text style={styles.imagePickerText}>Attach photo</Text>
+                <Image source={iconSources.camera} style={[styles.cameraIcon, { tintColor: theme.primary }]} resizeMode="contain" />
+                <Text style={[styles.imagePickerText, { color: theme.primary }]}>Attach photo</Text>
               </>
             )}
           </Pressable>
         </View>
 
         <Pressable
-          style={[styles.submitButton, isSubmitting ? styles.submitDisabled : null]}
+          style={[styles.submitButton, { backgroundColor: theme.primary }, isSubmitting ? styles.submitDisabled : null]}
           disabled={isSubmitting}
           onPress={handleSubmit}>
           {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit Live Report</Text>}
@@ -210,7 +211,6 @@ export default function ReportScreen() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#fff',
     flex: 1,
   },
   content: {
@@ -225,7 +225,6 @@ const styles = StyleSheet.create({
   },
   backButton: {
     alignItems: 'center',
-    backgroundColor: '#edf4fa',
     borderRadius: 18,
     height: 38,
     justifyContent: 'center',
@@ -234,23 +233,18 @@ const styles = StyleSheet.create({
   },
   backIcon: {
     height: 18,
-    tintColor: Colors.light.primary,
     width: 18,
   },
   title: {
-    color: Colors.light.text,
     fontSize: 24,
     fontWeight: '900',
   },
   subtitle: {
-    color: Colors.light.muted,
     fontSize: 12,
     fontWeight: '700',
   },
   locationPanel: {
     alignItems: 'center',
-    backgroundColor: '#eef6fb',
-    borderColor: '#c9deef',
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
@@ -258,25 +252,21 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   panelLabel: {
-    color: Colors.light.primaryDark,
     fontSize: 11,
     fontWeight: '900',
     textTransform: 'uppercase',
   },
   locationText: {
-    color: Colors.light.text,
     fontSize: 14,
     fontWeight: '900',
     marginTop: 4,
   },
   accuracyText: {
-    color: Colors.light.muted,
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
   },
   locateButton: {
-    backgroundColor: Colors.light.primary,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -290,7 +280,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   label: {
-    color: Colors.light.text,
     fontSize: 13,
     fontWeight: '900',
   },
@@ -300,27 +289,16 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   chip: {
-    backgroundColor: '#f4f7fa',
-    borderColor: '#dce5ed',
     borderRadius: 15,
     borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 9,
   },
-  chipActive: {
-    backgroundColor: '#e7f1fa',
-    borderColor: Colors.light.primary,
-  },
   chipText: {
-    color: Colors.light.muted,
     fontSize: 12,
     fontWeight: '800',
   },
-  chipTextActive: {
-    color: Colors.light.primaryDark,
-  },
   segmentRow: {
-    backgroundColor: '#f0f4f7',
     borderRadius: 15,
     flexDirection: 'row',
     padding: 4,
@@ -331,24 +309,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
   },
-  segmentActive: {
-    backgroundColor: '#fff',
-    elevation: 2,
-  },
   segmentText: {
-    color: Colors.light.muted,
     fontSize: 11,
     fontWeight: '900',
   },
-  segmentTextActive: {
-    color: Colors.light.primary,
-  },
   descriptionInput: {
-    backgroundColor: '#f8fafb',
-    borderColor: '#dce5ed',
     borderRadius: 14,
     borderWidth: 1,
-    color: Colors.light.text,
     fontSize: 14,
     minHeight: 112,
     padding: 14,
@@ -356,14 +323,11 @@ const styles = StyleSheet.create({
   },
   counter: {
     alignSelf: 'flex-end',
-    color: Colors.light.muted,
     fontSize: 10,
     fontWeight: '700',
   },
   imagePicker: {
     alignItems: 'center',
-    backgroundColor: '#f8fafb',
-    borderColor: '#d6e0e8',
     borderRadius: 16,
     borderStyle: 'dashed',
     borderWidth: 1,
@@ -373,11 +337,9 @@ const styles = StyleSheet.create({
   },
   cameraIcon: {
     height: 30,
-    tintColor: Colors.light.primary,
     width: 30,
   },
   imagePickerText: {
-    color: Colors.light.primary,
     fontSize: 13,
     fontWeight: '900',
     marginTop: 8,
@@ -388,7 +350,6 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     alignItems: 'center',
-    backgroundColor: Colors.light.primary,
     borderRadius: 18,
     height: 54,
     justifyContent: 'center',

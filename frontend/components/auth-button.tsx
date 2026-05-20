@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, type PressableProps } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useAppTheme } from '@/components/EmergencyUI';
 
 type AuthButtonProps = PressableProps & {
   title: string;
@@ -8,16 +8,18 @@ type AuthButtonProps = PressableProps & {
 };
 
 export function AuthButton({ title, variant = 'primary', style, ...props }: AuthButtonProps) {
+  const theme = useAppTheme();
+
   return (
     <Pressable
       style={({ pressed }) => [
-        variant === 'primary' ? styles.primary : styles.textButton,
+        variant === 'primary' ? [styles.primary, { backgroundColor: theme.primary }] : styles.textButton,
         pressed ? styles.pressed : undefined,
         props.disabled ? styles.disabled : undefined,
         typeof style === 'function' ? style({ pressed, hovered: false }) : style,
       ]}
       {...props}>
-      <Text style={variant === 'primary' ? styles.primaryText : styles.textButtonLabel}>{title}</Text>
+      <Text style={variant === 'primary' ? styles.primaryText : [styles.textButtonLabel, { color: theme.text }]}>{title}</Text>
     </Pressable>
   );
 }
@@ -28,7 +30,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 5,
-    backgroundColor: Colors.light.primary,
   },
   primaryText: {
     color: '#fff',
@@ -41,7 +42,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   textButtonLabel: {
-    color: Colors.light.black,
     fontSize: 17,
     fontWeight: '600',
   },

@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { BottomNav } from '@/components/BottomNav';
+import { useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
-import { Colors } from '@/constants/theme';
 import { useAuthSession } from '@/context/auth-context';
 import { useHazardReports } from '@/hooks/useHazardReports';
 import { useLiveLocation } from '@/hooks/useLiveLocation';
@@ -21,15 +21,18 @@ function IconButton({
   label: string;
   onPress: () => void;
 }) {
+  const theme = useAppTheme();
+
   return (
-    <Pressable style={styles.iconButton} onPress={onPress}>
-      <Text style={styles.iconButtonText}>{label}</Text>
+    <Pressable style={[styles.iconButton, { backgroundColor: theme.surface, shadowColor: theme.black }]} onPress={onPress}>
+      <Text style={[styles.iconButtonText, { color: theme.primary }]}>{label}</Text>
     </Pressable>
   );
 }
 
 export default function MapScreen() {
   const { session } = useAuthSession();
+  const theme = useAppTheme();
   const { reports, isLoading, error } = useHazardReports(session?.idToken);
   const { location, isLocating, error: locationError, locateOnce } = useLiveLocation(true);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
@@ -49,7 +52,7 @@ export default function MapScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <View style={styles.mapShell}>
         <HazardMapView
           reports={reports}
@@ -63,10 +66,10 @@ export default function MapScreen() {
           focusSignal={focusSignal}
         />
 
-        <View style={styles.headerBar}>
+        <View style={[styles.headerBar, { backgroundColor: theme.surface, borderColor: theme.borderSoft, shadowColor: theme.black }]}>
           <View>
-            <Text style={styles.title}>Live Hazard Map</Text>
-            <Text style={styles.subtitle}>{reports.length} active reports in Marikina</Text>
+            <Text style={[styles.title, { color: theme.text }]}>Live Hazard Map</Text>
+            <Text style={[styles.subtitle, { color: theme.muted }]}>{reports.length} active reports in Marikina</Text>
           </View>
         </View>
 
@@ -83,7 +86,6 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: '#fff',
     flex: 1,
   },
   mapShell: {
@@ -91,7 +93,7 @@ const styles = StyleSheet.create({
   },
   headerBar: {
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    borderWidth: 1,
     borderRadius: 20,
     elevation: 8,
     flexDirection: 'row',
@@ -101,18 +103,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 16,
     top: 18,
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.16,
     shadowRadius: 8,
   },
   title: {
-    color: Colors.light.text,
     fontSize: 17,
     fontWeight: '900',
   },
   subtitle: {
-    color: Colors.light.muted,
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
@@ -127,7 +126,6 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     alignItems: 'center',
-    backgroundColor: '#fff',
     borderRadius: 18,
     elevation: 8,
     flex: 1,
@@ -135,13 +133,11 @@ const styles = StyleSheet.create({
     gap: 8,
     height: 52,
     justifyContent: 'center',
-    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
   },
   iconButtonText: {
-    color: Colors.light.primary,
     fontSize: 13,
     fontWeight: '900',
   },

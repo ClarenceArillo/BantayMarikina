@@ -1,0 +1,130 @@
+env: load .env
+env: export EXPO_PUBLIC_API_URL EXPO_PUBLIC_FIREBASE_API_KEY EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN EXPO_PUBLIC_FIREBASE_PROJECT_ID EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET
+Starting project at C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend
+React Compiler enabled
+Starting Metro Bundler
+warning: Bundler cache is empty, rebuilding (this may take a minute)
+Waiting on http://localhost:8082
+Logs for your project will appear below.
+Web node_modules\expo-router\entry.js ▓▓░░░░░░░░░░░░░░ 16.0% ( 4/10)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  5.0% ( 39/197)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ▓▓▓▓░░░░░░░░░░░░ 29.3% ( 42/148)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓░░░░░░░░ 53.5% (436/602)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓░░░░░░░░░░░ 32.3% (241/424)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 71.9% (686/809)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓░░░░░░ 64.2% (573/730)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 84.1% (904/986)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 72.9% (793/937)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 91.5% (1129/1192)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+| Dynamic import at line 15: require(moduleName). This module may not work as intended when deployed to a runtime.
+λ Bundled 18995ms node_modules\expo-router\node\render.js (1317 modules)
+λ Bundled 19052ms node_modules\expo-router\node\render.js (1 module)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (1181/1181)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 22230ms node_modules\expo-router\entry.js (1 module)
+Web Bundled 22267ms node_modules\expo-router\entry.js (1181 modules)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 58.0% (606/796)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 97.5% (1165/1180)
+Web Bundled 7059ms node_modules\expo-router\entry.js (1181 modules)
+ LOG  [web] Logs will appear in the browser console
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+λ Bundled 46ms node_modules\expo-router\node\render.js (1 module)
+Web Bundled 606ms node_modules\expo-router\entry.js (1 module)
+Unable to resolve "expo-linear-gradient" from "app\home.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mimport[39m { [33mLinearGradient[39m } [36mfrom[39m [32m'expo-linear-gradient'[39m[33m;[39m
+ [90m   |[39m                                 [31m[1m^[22m[39m
+ [90m 2 |[39m [36mimport[39m { router[33m,[39m useLocalSearchParams } [36mfrom[39m [32m'expo-router'[39m[33m;[39m
+ [90m 3 |[39m [36mimport[39m { useCallback[33m,[39m useEffect[33m,[39m useMemo[33m,[39m useState } [36mfrom[39m [32m'react'[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m {[0m
+
+Import stack:
+
+ app\home.tsx
+ | import "expo-linear-gradient"
+
+ app (require.context)
+
+Unable to resolve "expo-clipboard" from "app\hotline.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mimport[39m [33m*[39m [36mas[39m [33mClipboard[39m [36mfrom[39m [32m'expo-clipboard'[39m[33m;[39m
+ [90m   |[39m                             [31m[1m^[22m[39m
+ [90m 2 |[39m [36mimport[39m { [33mLinearGradient[39m } [36mfrom[39m [32m'expo-linear-gradient'[39m[33m;[39m
+ [90m 3 |[39m [36mimport[39m { router } [36mfrom[39m [32m'expo-router'[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m { useState } [36mfrom[39m [32m'react'[39m[33m;[39m[0m
+
+Import stack:
+
+ app\hotline.tsx
+ | import "expo-clipboard"
+
+ app (require.context)
+
+Unable to resolve "expo-clipboard" from "app\hotline.tsx"
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mimport[39m [33m*[39m [36mas[39m [33mClipboard[39m [36mfrom[39m [32m'expo-clipboard'[39m[33m;[39m
+ [90m   |[39m                             [31m[1m^[22m[39m
+ [90m 2 |[39m [36mimport[39m { [33mLinearGradient[39m } [36mfrom[39m [32m'expo-linear-gradient'[39m[33m;[39m
+ [90m 3 |[39m [36mimport[39m { router } [36mfrom[39m [32m'expo-router'[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m { useState } [36mfrom[39m [32m'react'[39m[33m;[39m[0m
+
+Import stack:
+
+ app\hotline.tsx
+ | import "expo-clipboard"
+
+ app (require.context)
+
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundling failed 2153ms node_modules\expo-router\entry.js (1 module)
+λ Bundling failed 2257ms node_modules\expo-router\node\render.js (1 module)
+
+Metro error: Unable to resolve module expo-clipboard from C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\app\hotline.tsx: expo-clipboard could not be found within the project or in these directories:
+  node_modules
+  ..\node_modules
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mimport[39m [33m*[39m [36mas[39m [33mClipboard[39m [36mfrom[39m [32m'expo-clipboard'[39m[33m;[39m
+ [90m   |[39m                             [31m[1m^[22m[39m
+ [90m 2 |[39m [36mimport[39m { [33mLinearGradient[39m } [36mfrom[39m [32m'expo-linear-gradient'[39m[33m;[39m
+ [90m 3 |[39m [36mimport[39m { router } [36mfrom[39m [32m'expo-router'[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m { useState } [36mfrom[39m [32m'react'[39m[33m;[39m[0m
+
+Import stack:
+
+ app\hotline.tsx
+ | import "expo-clipboard"
+
+ app (require.context)
+
+
+Call Stack
+  <unknown> (app\hotline.tsx)
+Web node_modules\expo-router\entry.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundling failed 1271ms node_modules\expo-router\entry.js (1 module)
+λ Bundling failed 1352ms node_modules\expo-router\node\render.js (1 module)
+
+Metro error: Unable to resolve module expo-clipboard from C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend\app\hotline.tsx: expo-clipboard could not be found within the project or in these directories:
+  node_modules
+  ..\node_modules
+[0m[31m[1m>[22m[39m[90m 1 |[39m [36mimport[39m [33m*[39m [36mas[39m [33mClipboard[39m [36mfrom[39m [32m'expo-clipboard'[39m[33m;[39m
+ [90m   |[39m                             [31m[1m^[22m[39m
+ [90m 2 |[39m [36mimport[39m { [33mLinearGradient[39m } [36mfrom[39m [32m'expo-linear-gradient'[39m[33m;[39m
+ [90m 3 |[39m [36mimport[39m { router } [36mfrom[39m [32m'expo-router'[39m[33m;[39m
+ [90m 4 |[39m [36mimport[39m { useState } [36mfrom[39m [32m'react'[39m[33m;[39m[0m
+
+Import stack:
+
+ app\hotline.tsx
+ | import "expo-clipboard"
+
+ app (require.context)
+
+
+Call Stack
+  <unknown> (app\hotline.tsx)

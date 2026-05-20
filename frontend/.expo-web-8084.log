@@ -1,0 +1,27 @@
+
+> bantay-marikina-frontend@1.0.0 web
+> expo start --web --port 8084
+
+env: load .env
+env: export EXPO_PUBLIC_API_URL EXPO_PUBLIC_FIREBASE_API_KEY EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN EXPO_PUBLIC_FIREBASE_PROJECT_ID EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET
+Starting project at C:\Users\CLARENCE\OneDrive\Tài liệu\NU\2nd Year\3rd Term 2nd yr\Database System\Database Sytem Project\frontend
+React Compiler enabled
+Starting Metro Bundler
+Waiting on http://localhost:8084
+Logs for your project will appear below.
+Web node_modules\expo-router\entry.js ▓░░░░░░░░░░░░░░░  7.4% ( 11/122)
+λ node_modules\expo-router\node\render.js ░░░░░░░░░░░░░░░░  4.0% ( 11/122)
+Web node_modules\expo-router\entry.js ▓▓▓░░░░░░░░░░░░░ 21.5% (134/289)
+λ node_modules\expo-router\node\render.js ▓▓▓▓░░░░░░░░░░░░ 26.9% (178/343)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓░░░░░░░░ 52.3% (400/553)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓░░░░░░░ 59.8% (474/613)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 73.5% (691/806)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓░░░░ 75.4% (712/823)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓░░░░░ 74.7% ( 865/1001)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓░░░ 82.3% ( 969/1068)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 95.2% (1079/1106)
+λ node_modules\expo-router\node\render.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░ 92.2% (1200/1250)
+| Dynamic import at line 15: require(moduleName). This module may not work as intended when deployed to a runtime.
+λ Bundled 21656ms node_modules\expo-router\node\render.js (1332 modules)
+Web node_modules\expo-router\entry.js ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░ 99.9% (1195/1195)
+Web Bundled 25264ms node_modules\expo-router\entry.js (1195 modules)
