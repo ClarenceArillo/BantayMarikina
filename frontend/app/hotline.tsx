@@ -124,7 +124,7 @@ function OfficeRow({ item }: { item: (typeof offices)[number] }) {
   return (
     <View style={[styles.officeRow, { borderBottomColor: theme.borderSoft }]}>
       <View style={[styles.officeIcon, { backgroundColor: theme.primaryTint }]}>
-        <AppIcon source={item.icon} size={20} tintColor={theme.primary} />
+        <AppIcon source={item.icon} size={20} />
       </View>
       <View style={styles.officeCopy}>
         <Text style={[styles.officeName, { color: theme.text }]}>{item.name}</Text>

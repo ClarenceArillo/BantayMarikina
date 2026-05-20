@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
 
 import { useAppTheme } from '@/components/EmergencyUI';
+import { useTheme } from '@/theme/useTheme';
 import { Radius } from '@/constants/theme';
 
 type BottomNavTab = 'home' | 'map' | 'report' | 'notification' | 'profile';
@@ -11,15 +13,26 @@ type BottomNavProps = {
 };
 
 const iconSources = {
-  alert: require('@/assets/Icons/Alert.png'),
-  home: require('@/assets/Icons/Home.png'),
-  homeActive: require('@/assets/Icons/Home (2).png'),
-  map: require('@/assets/Icons/Map.png'),
-  mapActive: require('@/assets/Icons/Map (2).png'),
-  notification: require('@/assets/Icons/Notification.png'),
-  notificationActive: require('@/assets/Icons/Notification-Active.png'),
-  profile: require('@/assets/Icons/ProfileIcon.png'),
-  profileActive: require('@/assets/Icons/ProfileIcon-Active.png'),
+  home: {
+    light: { inactive: require('@/assets/Icons/Home.png'), active: require('@/assets/Icons/Home (2).png') },
+    dark: { inactive: require('@/assets/Icons/Home.png'), active: require('@/assets/Icons/Home (2).png') },
+  },
+  map: {
+    light: { inactive: require('@/assets/Icons/Map.png'), active: require('@/assets/Icons/Map (2).png') },
+    dark: { inactive: require('@/assets/Icons/Map.png'), active: require('@/assets/Icons/Map (2).png') },
+  },
+  report: {
+    light: { inactive: require('@/assets/Icons/Flag.png'), active: require('@/assets/Icons/RedFlag.png') },
+    dark: { inactive: require('@/assets/Icons/Flag.png'), active: require('@/assets/Icons/RedFlag.png') },
+  },
+  notification: {
+    light: { inactive: require('@/assets/Icons/Notification.png'), active: require('@/assets/Icons/Notification-Active.png') },
+    dark: { inactive: require('@/assets/Icons/Notification.png'), active: require('@/assets/Icons/Notification-Active.png') },
+  },
+  profile: {
+    light: { inactive: require('@/assets/Icons/ProfileIcon.png'), active: require('@/assets/Icons/ProfileIcon-Active.png') },
+    dark: { inactive: require('@/assets/Icons/ProfileIcon.png'), active: require('@/assets/Icons/ProfileIcon-Active.png') },
+  },
 };
 
 const routesByTab = {
@@ -35,17 +48,17 @@ function navigate(tab: BottomNavTab) {
   router.replace(routesByTab[tab] as never);
 }
 
-function NavIcon({ tab, active }: { tab: BottomNavTab; active: boolean }) {
-  const theme = useAppTheme();
-  const sourceByTab = {
-    home: active ? iconSources.homeActive : iconSources.home,
-    map: active ? iconSources.mapActive : iconSources.map,
-    notification: active ? iconSources.notificationActive : iconSources.notification,
-    profile: active ? iconSources.profileActive : iconSources.profile,
-    report: iconSources.alert,
-  };
+function getTabIcon(tab: BottomNavTab, active: boolean, isDark: boolean): ImageSourcePropType {
+  const mode = isDark ? 'dark' : 'light';
+  const state = active ? 'active' : 'inactive';
 
-  return <Image source={sourceByTab[tab]} style={[styles.navIcon, tab === 'report' ? { tintColor: theme.danger } : null]} resizeMode="contain" />;
+  return iconSources[tab][mode][state];
+}
+
+function NavIcon({ tab, active }: { tab: BottomNavTab; active: boolean }) {
+  const { isDark } = useTheme();
+
+  return <Image source={getTabIcon(tab, active, isDark)} style={styles.navIcon} resizeMode="contain" />;
 }
 
 function NavItem({ label, tab, activeTab }: { label: string; tab: BottomNavTab; activeTab: BottomNavTab }) {

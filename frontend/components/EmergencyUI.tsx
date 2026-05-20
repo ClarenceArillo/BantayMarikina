@@ -14,6 +14,17 @@ import { useTheme } from '@/theme/useTheme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
+const modeIconSources = {
+  light: {
+    active: require('@/assets/Icons/LightMode-Active.png'),
+    inactive: require('@/assets/Icons/LightMode.png'),
+  },
+  dark: {
+    active: require('@/assets/Icons/DarkMode-Active.png'),
+    inactive: require('@/assets/Icons/DarkMode.png'),
+  },
+};
+
 export function useAppTheme() {
   return useTheme().colors;
 }
@@ -41,8 +52,16 @@ export function ThemeToggle() {
           borderColor: colors.borderSoft,
         },
       ]}>
-      <Text style={[styles.themeToggleIcon, { color: isDark ? colors.mutedSoft : colors.warning }]}>L</Text>
-      <Text style={[styles.themeToggleIcon, { color: isDark ? colors.primary : colors.mutedSoft }]}>D</Text>
+      <Image
+        source={isDark ? modeIconSources.light.inactive : modeIconSources.light.active}
+        resizeMode="contain"
+        style={styles.themeToggleIcon}
+      />
+      <Image
+        source={isDark ? modeIconSources.dark.active : modeIconSources.dark.inactive}
+        resizeMode="contain"
+        style={styles.themeToggleIcon}
+      />
       <Animated.View
         style={[
           styles.themeToggleThumb,
@@ -159,7 +178,7 @@ export function SectionHeader({
       <View style={styles.sectionTitleWrap}>
         {icon ? (
           <View style={[styles.sectionIcon, { backgroundColor: theme.primaryTint }]}>
-            <AppIcon source={icon} size={18} tintColor={theme.primary} />
+            <AppIcon source={icon} size={18} />
           </View>
         ) : null}
         <View>
@@ -375,9 +394,8 @@ const styles = StyleSheet.create({
     width: 72,
   },
   themeToggleIcon: {
-    fontSize: 13,
-    fontWeight: '900',
-    lineHeight: 16,
+    height: 18,
+    width: 18,
     zIndex: 2,
   },
   themeToggleThumb: {
