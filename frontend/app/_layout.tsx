@@ -32,6 +32,7 @@ function ThemedStack() {
         <Stack.Screen name="hotline" />
         <Stack.Screen name="map" />
         <Stack.Screen name="report" />
+        <Stack.Screen name="notification" />
         <Stack.Screen name="profile" />
         <Stack.Screen name="forgot-password" />
         <Stack.Screen name="signup/index" />

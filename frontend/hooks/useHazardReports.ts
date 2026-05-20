@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 
 import { ensureFirebaseSession } from '@/services/firebaseSession';
 import { subscribeToHazardReports } from '@/services/hazardReportService';
-import type { HazardReport } from '@/types/hazard';
+import type { HazardReport, ReportFilters } from '@/types/hazard';
 
-export function useHazardReports(idToken?: string | null, maxReports = 300) {
+export function useHazardReports(idToken?: string | null, maxReports = 300, filters?: ReportFilters) {
   const [reports, setReports] = useState<HazardReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +32,8 @@ export function useHazardReports(idToken?: string | null, maxReports = 300) {
               setError(snapshotError.message);
               setIsLoading(false);
             },
-            maxReports
+            maxReports,
+            filters
           );
         } catch (subscriptionError) {
           if (!isMounted) return;
@@ -50,7 +51,7 @@ export function useHazardReports(idToken?: string | null, maxReports = 300) {
       isMounted = false;
       unsubscribe?.();
     };
-  }, [idToken, maxReports]);
+  }, [filters, idToken, maxReports]);
 
   return { reports, isLoading, error };
 }

@@ -39,12 +39,11 @@ const routesByTab = {
   home: '/home',
   map: '/map',
   report: '/report',
+  notification: '/notification',
   profile: '/profile',
 } as const;
 
 function navigate(tab: BottomNavTab) {
-  if (tab === 'notification') return;
-
   router.replace(routesByTab[tab] as never);
 }
 

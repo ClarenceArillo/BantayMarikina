@@ -5,10 +5,11 @@ import { BottomNav } from '@/components/BottomNav';
 import { useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
+import { ReportFilterBar } from '@/components/ReportFilterBar';
 import { useAuthSession } from '@/context/auth-context';
 import { useHazardReports } from '@/hooks/useHazardReports';
 import { useLiveLocation } from '@/hooks/useLiveLocation';
-import type { HazardReport } from '@/types/hazard';
+import type { HazardReport, ReportFilters } from '@/types/hazard';
 
 const iconSources = {
   pin: require('@/assets/Icons/Pin.png'),
@@ -33,7 +34,8 @@ function IconButton({
 export default function MapScreen() {
   const { session } = useAuthSession();
   const theme = useAppTheme();
-  const { reports, isLoading, error } = useHazardReports(session?.idToken);
+  const [filters, setFilters] = useState<ReportFilters>({ dateRange: 'month', hazardType: 'All', severity: 'All', status: 'All', source: 'All' });
+  const { reports, isLoading, error } = useHazardReports(session?.idToken, 300, filters);
   const { location, isLocating, error: locationError, locateOnce } = useLiveLocation(true);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
@@ -71,6 +73,10 @@ export default function MapScreen() {
             <Text style={[styles.title, { color: theme.text }]}>Live Hazard Map</Text>
             <Text style={[styles.subtitle, { color: theme.muted }]}>{reports.length} active reports in Marikina</Text>
           </View>
+        </View>
+
+        <View style={[styles.filterPanel, { backgroundColor: theme.surface, borderColor: theme.borderSoft, shadowColor: theme.black }]}>
+          <ReportFilterBar filters={filters} onChange={setFilters} compact />
         </View>
 
         <View style={styles.controls}>
@@ -123,6 +129,19 @@ const styles = StyleSheet.create({
     left: 18,
     position: 'absolute',
     right: 18,
+  },
+  filterPanel: {
+    borderRadius: 18,
+    borderWidth: 1,
+    elevation: 8,
+    left: 16,
+    padding: 10,
+    position: 'absolute',
+    right: 16,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    top: 92,
   },
   iconButton: {
     alignItems: 'center',

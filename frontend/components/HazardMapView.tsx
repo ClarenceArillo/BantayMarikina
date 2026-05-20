@@ -107,6 +107,10 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
     html, body, #map { height: 100%; margin: 0; width: 100%; }
     body { background: ${mapBackground}; }
     .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: ${popupBackground}; color: ${popupText}; }
+    .hazard-preview { min-width: 168px; }
+    .hazard-preview-title { font-size: 13px; font-weight: 800; margin-bottom: 4px; }
+    .hazard-preview-meta { font-size: 11px; font-weight: 700; opacity: .72; }
+    .hazard-preview-body { font-size: 11px; line-height: 1.35; margin-top: 6px; }
     .hazard-pin { filter: drop-shadow(0 5px 7px rgba(0,0,0,.28)); }
     .hazard-pin-wrap { align-items: center; display: flex; justify-content: center; position: relative; }
     .hazard-pin-wrap::after {
@@ -181,6 +185,14 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
       });
     }
 
+    function popupHtml(report) {
+      return '<div class="hazard-preview">' +
+        '<div class="hazard-preview-title">' + escapeHtml(report.hazardType || 'Hazard') + '</div>' +
+        '<div class="hazard-preview-meta">' + escapeHtml(report.severity || 'Live') + ' • ' + escapeHtml(report.barangay || 'Marikina City') + '</div>' +
+        '<div class="hazard-preview-body">' + escapeHtml(report.description || 'Tap for full details') + '</div>' +
+      '</div>';
+    }
+
     function updateReports(reports) {
       cluster.clearLayers();
       markersById = {};
@@ -188,8 +200,10 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
         if (!isValidPoint(report)) return;
         const marker = L.marker([report.latitude, report.longitude], { icon: markerIcon(report), title: report.hazardType });
         marker.bindTooltip(report.hazardType || 'Hazard', { direction: 'top', offset: [0, -28] });
+        marker.bindPopup(popupHtml(report), { closeButton: false, maxWidth: 220 });
         marker.on('click', (event) => {
           if (event.originalEvent) L.DomEvent.stopPropagation(event.originalEvent);
+          marker.openPopup();
           post({ type: 'markerPress', id: report.id });
         });
         markersById[report.id] = marker;
@@ -292,6 +306,8 @@ export function HazardMapView({
         .map((report) => ({
           id: report.id,
           hazardType: report.hazardType,
+          description: report.description,
+          barangay: report.barangay,
           latitude: report.latitude,
           longitude: report.longitude,
           severity: report.severity,

@@ -16,12 +16,16 @@ import {
 
 import { BottomNav } from '@/components/BottomNav';
 import { useAppTheme } from '@/components/EmergencyUI';
+import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
+import { ReportCard } from '@/components/ReportCard';
+import { ReportFilterBar } from '@/components/ReportFilterBar';
 import { useAuthSession } from '@/context/auth-context';
+import { useHazardReports } from '@/hooks/useHazardReports';
 import { useLiveLocation } from '@/hooks/useLiveLocation';
 import { ensureFirebaseSession } from '@/services/firebaseSession';
 import { submitHazardReport } from '@/services/hazardReportService';
-import { HAZARD_TYPES, SEVERITY_LEVELS, type HazardSeverity, type HazardType } from '@/types/hazard';
+import { HAZARD_TYPES, SEVERITY_LEVELS, type HazardReport, type HazardSeverity, type HazardType, type ReportFilters } from '@/types/hazard';
 
 const iconSources = {
   arrow: require('@/assets/Icons/Arrow.png'),
@@ -38,6 +42,9 @@ export default function ReportScreen() {
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
+  const [filters, setFilters] = useState<ReportFilters>({ dateRange: 'month', hazardType: 'All', severity: 'All', status: 'All', source: 'All' });
+  const { reports, isLoading: isFeedLoading } = useHazardReports(session?.idToken, 80, filters);
 
   const barangay = session?.profile?.address?.barangay || session?.barangay || '';
   const userLocation = useMemo(
@@ -203,8 +210,21 @@ export default function ReportScreen() {
           onPress={handleSubmit}>
           {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit Live Report</Text>}
         </Pressable>
+
+        <View style={styles.feedSection}>
+          <View>
+            <Text style={[styles.title, { color: theme.text }]}>Community Reports</Text>
+            <Text style={[styles.subtitle, { color: theme.muted }]}>{reports.length} live reports matching filters</Text>
+          </View>
+          <ReportFilterBar filters={filters} onChange={setFilters} />
+          {isFeedLoading ? <ActivityIndicator color={theme.primary} /> : null}
+          {reports.slice(0, 12).map((item) => (
+            <ReportCard key={item.id} report={item} onPress={setSelectedReport} />
+          ))}
+        </View>
       </ScrollView>
       <BottomNav activeTab="report" />
+      <HazardDetailsSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
     </SafeAreaView>
   );
 }
@@ -361,5 +381,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '900',
+  },
+  feedSection: {
+    gap: 12,
+    marginTop: 8,
   },
 });
