@@ -1,0 +1,145 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function validMarikinaPoint() {
+      return request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.latitude >= 14.57
+        && request.resource.data.latitude <= 14.72
+        && request.resource.data.longitude >= 121.03
+        && request.resource.data.longitude <= 121.18;
+    }
+
+    function validHazardReport() {
+      return request.resource.data.hazardType in [
+          'Flood',
+          'Fire',
+          'Landslide',
+          'Earthquake Damage',
+          'Road Blockage',
+          'Power Outage',
+          'Others'
+        ]
+        && request.resource.data.description is string
+        && request.resource.data.description.size() >= 8
+        && request.resource.data.description.size() <= 240
+        && request.resource.data.severity in ['Low', 'Moderate', 'High', 'Critical']
+        && request.resource.data.status in ['active', 'pending']
+        && validMarikinaPoint();
+    }
+
+    match /Reports/{reportId} {
+      allow read: if signedIn();
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && validHazardReport();
+      allow update: if signedIn()
+        && (
+          (
+            resource.data.userId == request.auth.uid
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+              'description',
+              'imageUrl',
+              'image_url',
+              'updatedAt'
+            ])
+          )
+          || request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'likeCount',
+            'commentCount',
+            'viewCount',
+            'userReportCount',
+            'reportCategoryCounts',
+            'moderationStatus',
+            'status',
+            'removedReason',
+            'updatedAt'
+          ])
+        );
+      allow delete: if false;
+
+      match /likes/{userId} {
+        allow read: if signedIn();
+        allow create, delete: if signedIn() && request.auth.uid == userId;
+        allow update: if false;
+      }
+
+      match /comments/{commentId} {
+        allow read: if signedIn();
+        allow create: if signedIn()
+          && request.resource.data.userId == request.auth.uid
+          && request.resource.data.body is string
+          && request.resource.data.body.size() >= 2
+          && request.resource.data.body.size() <= 400;
+        allow update, delete: if false;
+      }
+
+      match /userViews/{userId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn() && request.auth.uid == userId;
+        allow update, delete: if false;
+      }
+
+      match /userReports/{userId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow create: if signedIn()
+          && request.auth.uid == userId
+          && request.resource.data.category in [
+            'false_report',
+            'inaccurate_image',
+            'misleading_information',
+            'spam',
+            'other'
+          ];
+        allow update, delete: if false;
+      }
+    }
+
+    match /Notifications/{notificationId} {
+      allow read: if signedIn()
+        && (
+          resource.data.audience == 'all'
+          || resource.data.recipientId == request.auth.uid
+        );
+      allow create: if signedIn()
+        && (
+          request.resource.data.audience == 'all'
+          || request.resource.data.recipientId == request.auth.uid
+        );
+      allow update, delete: if false;
+    }
+
+    match /NotificationReads/{readId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create, update: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /ModerationLogs/{logId} {
+      allow read: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if false;
+    }
+
+    match /DashboardData/{docId} {
+      allow read: if docId in ['weather', 'waterlevel'];
+      allow write: if false;
+
+      match /records/{recordId} {
+        allow read: if docId in ['weather', 'waterlevel'];
+        allow write: if false;
+      }
+    }
+
+    match /Users/{userId} {
+      allow read, update: if signedIn() && request.auth.uid == userId;
+      allow create: if false;
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "scripts": {
+    "remote": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-remote.ps1",
+    "remote:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/stop-remote.ps1",
+    "backend:start": "npm --prefix backend run start",
+    "backend:tunnel": "npm --prefix backend run tunnel",
+    "frontend:tunnel": "npm --prefix frontend run start:tunnel"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  },
+  "dependencies": {
+    "expo": "^49.0.23"
+  }
+}
