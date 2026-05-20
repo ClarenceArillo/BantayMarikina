@@ -1,6 +1,6 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { Colors } from '@/constants/theme';
+import { useAppTheme } from '@/components/EmergencyUI';
 
 type AuthStatusModalProps = {
   buttonTitle: string;
@@ -27,20 +27,19 @@ export function AuthStatusModal({
   title,
   visible,
 }: AuthStatusModalProps) {
+  const theme = useAppTheme();
   const isSuccess = status === 'success';
 
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.statusCard}>
-          <View style={[styles.iconCircle, isSuccess ? styles.successIcon : styles.errorIcon]}>
-            <Text style={styles.iconMark}>{isSuccess ? '✓' : '!'}</Text>
+      <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
+        <View style={[styles.statusCard, { backgroundColor: theme.surface }]}>
+          <View style={[styles.iconCircle, { backgroundColor: isSuccess ? theme.successSoft : theme.dangerSoft }]}>
+            <Text style={[styles.iconMark, { color: isSuccess ? theme.success : theme.danger }]}>{isSuccess ? 'OK' : '!'}</Text>
           </View>
-          <Text style={[styles.statusTitle, isSuccess ? styles.successTitle : styles.errorTitle]}>
-            {title}
-          </Text>
-          {message ? <Text style={styles.statusMessage}>{message}</Text> : null}
-          <Pressable style={styles.statusButton} onPress={onClose}>
+          <Text style={[styles.statusTitle, { color: isSuccess ? theme.success : theme.danger }]}>{title}</Text>
+          {message ? <Text style={[styles.statusMessage, { color: theme.muted }]}>{message}</Text> : null}
+          <Pressable style={[styles.statusButton, { backgroundColor: theme.primary }]} onPress={onClose}>
             <Text style={styles.statusButtonText}>{buttonTitle}</Text>
           </Pressable>
         </View>
@@ -50,20 +49,22 @@ export function AuthStatusModal({
 }
 
 export function OptionModal({ onClose, onSelect, options, title, visible }: OptionModalProps) {
+  const theme = useAppTheme();
+
   return (
     <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.optionCard}>
-          <Text style={styles.optionTitle}>{title}</Text>
+      <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
+        <View style={[styles.optionCard, { backgroundColor: theme.surface }]}>
+          <Text style={[styles.optionTitle, { color: theme.primary }]}>{title}</Text>
           <ScrollView style={styles.optionList} contentContainerStyle={styles.optionListContent}>
             {options.map((option) => (
-              <Pressable key={option} style={styles.optionRow} onPress={() => onSelect(option)}>
-                <Text style={styles.optionText}>{option}</Text>
+              <Pressable key={option} style={[styles.optionRow, { borderColor: theme.border }]} onPress={() => onSelect(option)}>
+                <Text style={[styles.optionText, { color: theme.text }]}>{option}</Text>
               </Pressable>
             ))}
           </ScrollView>
           <Pressable style={styles.cancelButton} onPress={onClose}>
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Text style={[styles.cancelText, { color: theme.primary }]}>Cancel</Text>
           </Pressable>
         </View>
       </View>
@@ -74,17 +75,17 @@ export function OptionModal({ onClose, onSelect, options, title, visible }: Opti
 const styles = StyleSheet.create({
   overlay: {
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
     flex: 1,
     justifyContent: 'center',
     padding: 24,
   },
   statusCard: {
     alignItems: 'center',
-    backgroundColor: '#fff',
-    height: 250,
+    borderRadius: 14,
+    minHeight: 250,
     overflow: 'hidden',
-    paddingTop: 41,
+    paddingHorizontal: 18,
+    paddingTop: 36,
     width: 278,
   },
   iconCircle: {
@@ -94,62 +95,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     width: 82,
   },
-  successIcon: {
-    backgroundColor: '#e4f8d9',
-  },
-  errorIcon: {
-    backgroundColor: '#fde1e1',
-  },
   iconMark: {
-    color: '#2d75b4',
-    fontSize: 42,
-    fontWeight: '800',
-    lineHeight: 48,
+    fontSize: 28,
+    fontWeight: '900',
+    lineHeight: 34,
   },
   statusTitle: {
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '700',
     marginTop: 8,
     textAlign: 'center',
   },
-  successTitle: {
-    color: '#589f39',
-  },
-  errorTitle: {
-    color: '#d53939',
-  },
   statusMessage: {
-    color: Colors.light.placeholder,
     fontSize: 11,
     lineHeight: 15,
     marginTop: 5,
-    paddingHorizontal: 24,
+    paddingHorizontal: 12,
     textAlign: 'center',
   },
   statusButton: {
     alignItems: 'center',
-    backgroundColor: Colors.light.primary,
-    borderRadius: 5,
+    borderRadius: 8,
     height: 43,
     justifyContent: 'center',
-    marginTop: 12,
+    marginTop: 14,
     width: 192,
   },
   statusButtonText: {
     color: '#fff',
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '700',
   },
   optionCard: {
-    backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: 12,
     maxHeight: '78%',
+    maxWidth: 340,
     padding: 18,
     width: '100%',
-    maxWidth: 340,
   },
   optionTitle: {
-    color: Colors.light.primary,
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 10,
@@ -162,14 +146,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   optionRow: {
-    borderColor: Colors.light.border,
     borderRadius: 8,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
   optionText: {
-    color: Colors.light.black,
     fontSize: 15,
   },
   cancelButton: {
@@ -178,7 +160,6 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   cancelText: {
-    color: Colors.light.primary,
     fontSize: 15,
     fontWeight: '700',
   },

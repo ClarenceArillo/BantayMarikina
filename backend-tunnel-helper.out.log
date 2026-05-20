@@ -1,7 +1,0 @@
-
-> backend@1.0.0 tunnel
-> powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-tunnel.ps1
-
-Backend tunnel is ready: https://444990fa10d8bc.lhr.life
-Updated frontend/.env to EXPO_PUBLIC_API_URL=https://444990fa10d8bc.lhr.life/api
-Keep this terminal open while testing. Press Ctrl+C to stop the tunnel.

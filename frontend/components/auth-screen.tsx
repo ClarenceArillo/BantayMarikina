@@ -1,7 +1,7 @@
 import { Image, StyleSheet, Text, View, type ViewProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Colors } from '@/constants/theme';
+import { useAppTheme } from '@/components/EmergencyUI';
 
 type AuthScreenProps = ViewProps & {
   children: React.ReactNode;
@@ -10,14 +10,16 @@ type AuthScreenProps = ViewProps & {
 };
 
 export function AuthScreen({ children, logoMode = 'full', style, title }: AuthScreenProps) {
+  const theme = useAppTheme();
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={[styles.container, style]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
+      <View style={[styles.container, { backgroundColor: theme.background }, style]}>
         <Image
           source={require('@/assets/Logo/BantayMarikinaLogo.png')}
           style={logoMode === 'mark' ? styles.logoMark : styles.logoFull}
         />
-        <Text style={styles.title}>{title}</Text>
+        <Text style={[styles.title, { color: theme.primary }]}>{title}</Text>
         {children}
       </View>
     </SafeAreaView>
@@ -27,7 +29,6 @@ export function AuthScreen({ children, logoMode = 'full', style, title }: AuthSc
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.light.background,
   },
   container: {
     flex: 1,
@@ -35,7 +36,6 @@ const styles = StyleSheet.create({
     maxWidth: 430,
     alignSelf: 'center',
     paddingHorizontal: 24,
-    backgroundColor: Colors.light.background,
   },
   logoFull: {
     width: 116,
@@ -54,7 +54,6 @@ const styles = StyleSheet.create({
   title: {
     marginTop: 28,
     marginBottom: 26,
-    color: Colors.light.primary,
     fontSize: 24,
     fontWeight: '700',
     textAlign: 'center',
