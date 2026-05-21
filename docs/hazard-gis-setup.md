@@ -129,6 +129,9 @@ cd frontend
 npm run start:tunnel
 ```
 
+From the repo root, `npm run remote` starts the backend, creates a public backend URL, and updates `frontend/.env`.
+It tries Expo tunnel first for Expo Go. If Expo/ngrok prints `ngrok tunnel took too long to connect`, the script falls back to Expo Web and prints a public `https://...lhr.life` frontend URL that remote testers can open in a browser.
+
 For LAN mode, allow inbound TCP ports `8081`, `19000`, `19001`, `19002`, and `3000`, plus UDP ports `19000`, `19001`, and `19002`, in Windows Firewall. The backend must stay on `HOST=0.0.0.0`. You can leave `EXPO_PUBLIC_API_URL` empty so the app infers the backend URL from Expo's host, or set it to `http://YOUR_LAN_IP:3000/api`.
 
 For iOS with Expo Go, there is no ADB-style USB port reverse. Use LAN after making the Windows Wi-Fi network Private/opening firewall ports, or use tunnel mode on a network where ngrok is not blocked.
