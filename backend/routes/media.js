@@ -11,7 +11,13 @@ const MAX_VIDEO_BYTES = 80 * 1024 * 1024;
 
 function parseCloudinaryUrl() {
   const value = process.env.CLOUDINARY_URL;
-  if (!value) return null;
+  if (!value) {
+    return {
+      apiKey: process.env.CLOUDINARY_API_KEY,
+      apiSecret: process.env.CLOUDINARY_API_SECRET,
+      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+    };
+  }
 
   try {
     const parsed = new URL(value);
@@ -27,8 +33,11 @@ function parseCloudinaryUrl() {
 
 function getCloudinaryConfig() {
   const config = parseCloudinaryUrl();
-  if (!config?.apiKey || !config?.apiSecret || !config?.cloudName) {
-    throw new Error('CLOUDINARY_URL is not configured on the backend.');
+  if (!config?.apiKey || !config?.cloudName) {
+    throw new Error('Cloudinary cloud name and API key are not configured on the backend.');
+  }
+  if (!config?.apiSecret || config.apiSecret === 'your_cloudinary_api_secret') {
+    throw new Error('Cloudinary API secret is not configured on the backend. Upload signatures require CLOUDINARY_API_SECRET or CLOUDINARY_URL.');
   }
   return config;
 }
@@ -85,6 +94,18 @@ function validateUploadRequest({ bytes, folder, resourceType }) {
     throw new Error('This folder only accepts images.');
   }
 }
+
+router.get('/cloudinary/status', requireAuthenticatedUser, (req, res) => {
+  const config = parseCloudinaryUrl();
+
+  return res.json({
+    connected: Boolean(config?.apiKey && config?.apiSecret && config.apiSecret !== 'your_cloudinary_api_secret' && config?.cloudName),
+    cloudName: config?.cloudName || null,
+    apiKey: config?.apiKey || null,
+    hasApiSecret: Boolean(config?.apiSecret && config.apiSecret !== 'your_cloudinary_api_secret'),
+    uploadFolders: [...ALLOWED_FOLDERS],
+  });
+});
 
 router.post('/cloudinary/sign-upload', requireAuthenticatedUser, async (req, res) => {
   try {

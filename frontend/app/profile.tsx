@@ -16,7 +16,6 @@ import {
   View,
 } from 'react-native';
 
-import { BottomNav } from '@/components/BottomNav';
 import { useAppTheme } from '@/components/EmergencyUI';
 import { getFirebaseClients } from '@/config/firebase';
 import { useAuthSession } from '@/context/auth-context';
@@ -468,7 +467,6 @@ export default function ProfileScreen() {
         )}
       </ScrollView>
 
-      <BottomNav activeTab="profile" />
     </SafeAreaView>
   );
 }

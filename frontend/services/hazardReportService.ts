@@ -348,16 +348,17 @@ export function subscribeToNotifications(
   filters?: ReportFilters
 ): Unsubscribe {
   const { db } = getFirebaseClients();
-  let notificationDocs: QueryDocumentSnapshot<DocumentData>[] = [];
+  let publicNotificationDocs: QueryDocumentSnapshot<DocumentData>[] = [];
+  let userNotificationDocs: QueryDocumentSnapshot<DocumentData>[] = [];
   let readIds = new Set<string>();
   let reportsById = new Map<string, HazardReport>();
 
   const emit = () => {
-    const notifications = notificationDocs
-      .filter((snapshot) => {
-        const data = snapshot.data();
-        return data.audience === 'all' || data.recipientId === userId;
-      })
+    const docsById = new Map<string, QueryDocumentSnapshot<DocumentData>>();
+    publicNotificationDocs.forEach((snapshot) => docsById.set(snapshot.id, snapshot));
+    userNotificationDocs.forEach((snapshot) => docsById.set(snapshot.id, snapshot));
+
+    const notifications = [...docsById.values()]
       .map((snapshot) => {
         const reportId = snapshot.data().reportId;
         return normalizeNotification(snapshot, readIds, reportId ? reportsById.get(reportId) ?? null : null);
@@ -373,16 +374,28 @@ export function subscribeToNotifications(
     onNotifications(notifications);
   };
 
-  const notificationsQuery = query(
+  const publicNotificationsQuery = query(
     collection(db, NOTIFICATIONS_COLLECTION),
+    where('audience', '==', 'all'),
+    orderBy('createdAt', 'desc'),
+    limit(maxNotifications)
+  );
+  const userNotificationsQuery = query(
+    collection(db, NOTIFICATIONS_COLLECTION),
+    where('recipientId', '==', userId),
     orderBy('createdAt', 'desc'),
     limit(maxNotifications)
   );
   const readsQuery = query(collection(db, NOTIFICATION_READS_COLLECTION), where('userId', '==', userId));
   const reportsQuery = query(collection(db, REPORTS_COLLECTION), orderBy('timestamp', 'desc'), limit(maxNotifications));
 
-  const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
-    notificationDocs = snapshot.docs;
+  const unsubscribePublicNotifications = onSnapshot(publicNotificationsQuery, (snapshot) => {
+    publicNotificationDocs = snapshot.docs;
+    emit();
+  }, onError);
+
+  const unsubscribeUserNotifications = onSnapshot(userNotificationsQuery, (snapshot) => {
+    userNotificationDocs = snapshot.docs;
     emit();
   }, onError);
 
@@ -402,7 +415,8 @@ export function subscribeToNotifications(
   }, onError);
 
   return () => {
-    unsubscribeNotifications();
+    unsubscribePublicNotifications();
+    unsubscribeUserNotifications();
     unsubscribeReads();
     unsubscribeReports();
   };
@@ -537,10 +551,6 @@ function getDominantCategory(categories: Record<string, number>) {
   }, 'other');
 }
 
-function formatModerationCategory(category: ReportModerationCategory) {
-  return category.replace(/_/g, ' ');
-}
-
 export async function reportCommunityPost(
   reportId: string,
   userId: string,
@@ -551,7 +561,6 @@ export async function reportCommunityPost(
   const reportRef = doc(db, REPORTS_COLLECTION, reportId);
   const userReportRef = doc(db, REPORTS_COLLECTION, reportId, 'userReports', userId);
   const moderationLogRef = doc(collection(db, MODERATION_LOGS_COLLECTION));
-  const notificationRef = doc(collection(db, NOTIFICATIONS_COLLECTION));
 
   await runTransaction(db, async (transaction) => {
     const reportSnapshot = await transaction.get(reportRef);
@@ -598,19 +607,7 @@ export async function reportCommunityPost(
         createdAt: serverTimestamp(),
       });
 
-      if (reportData.userId) {
-        transaction.set(notificationRef, {
-          audience: 'user',
-          recipientId: reportData.userId,
-          type: 'moderation_removed',
-          reportId,
-          title: 'Report removed',
-          body: `Your report has been removed due to multiple community reports for ${formatModerationCategory(dominantCategory)}.`,
-          hazardType: reportData.hazardType || reportData.hazard_type || 'Hazard',
-          severity: reportData.severity || 'Moderate',
-          createdAt: serverTimestamp(),
-        });
-      }
+      // Cross-user moderation notifications are created by the Cloud Function onReportRemoved.
     }
   });
 }

@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import { useAppTheme } from '@/components/EmergencyUI';
 import { useTheme } from '@/theme/useTheme';
@@ -57,7 +58,11 @@ function getTabIcon(tab: BottomNavTab, active: boolean, isDark: boolean): ImageS
 function NavIcon({ tab, active }: { tab: BottomNavTab; active: boolean }) {
   const { isDark } = useTheme();
 
-  return <Image source={getTabIcon(tab, active, isDark)} style={styles.navIcon} resizeMode="contain" />;
+  return (
+    <Animated.View key={`${tab}-${active ? 'active' : 'inactive'}`} entering={FadeIn.duration(140)} exiting={FadeOut.duration(90)}>
+      <Image source={getTabIcon(tab, active, isDark)} style={styles.navIcon} resizeMode="contain" />
+    </Animated.View>
+  );
 }
 
 function NavItem({ label, tab, activeTab }: { label: string; tab: BottomNavTab; activeTab: BottomNavTab }) {
@@ -67,9 +72,11 @@ function NavItem({ label, tab, activeTab }: { label: string; tab: BottomNavTab; 
   if (tab === 'report') {
     return (
       <Pressable style={[styles.navItem, styles.reportNav]} onPress={() => navigate(tab)}>
-        <View style={[styles.reportButton, { backgroundColor: theme.surface, borderColor: active ? theme.primaryDark : theme.borderSoft, shadowColor: theme.black }, active ? styles.activeRaisedButton : null]}>
+        <Animated.View
+          layout={LinearTransition.springify().damping(18)}
+          style={[styles.reportButton, { backgroundColor: theme.surface, borderColor: active ? theme.primaryDark : theme.borderSoft, shadowColor: theme.black }, active ? styles.activeRaisedButton : null]}>
           <NavIcon tab={tab} active={active} />
-        </View>
+        </Animated.View>
         <Text style={active ? styles.activeNavLabel : styles.navLabel}>{label}</Text>
       </Pressable>
     );
@@ -78,9 +85,9 @@ function NavItem({ label, tab, activeTab }: { label: string; tab: BottomNavTab; 
   return (
     <Pressable style={styles.navItem} onPress={() => navigate(tab)} disabled={active}>
       {active ? (
-        <View style={[styles.activeIconBubble, { backgroundColor: theme.surface }]}>
+        <Animated.View layout={LinearTransition.springify().damping(18)} style={[styles.activeIconBubble, { backgroundColor: theme.surface }]}>
           <NavIcon tab={tab} active />
-        </View>
+        </Animated.View>
       ) : (
         <NavIcon tab={tab} active={false} />
       )}
@@ -93,13 +100,13 @@ export function BottomNav({ activeTab }: BottomNavProps) {
   const theme = useAppTheme();
 
   return (
-    <View style={[styles.bottomNav, { backgroundColor: theme.primary, shadowColor: theme.black }]}>
+    <Animated.View layout={LinearTransition.springify().damping(18)} style={[styles.bottomNav, { backgroundColor: theme.primary, shadowColor: theme.black }]}>
       <NavItem activeTab={activeTab} label="Home" tab="home" />
       <NavItem activeTab={activeTab} label="Map" tab="map" />
       <NavItem activeTab={activeTab} label="Report" tab="report" />
       <NavItem activeTab={activeTab} label="Notification" tab="notification" />
       <NavItem activeTab={activeTab} label="Profile" tab="profile" />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -121,6 +128,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
+    zIndex: 100,
   },
   navItem: {
     alignItems: 'center',

@@ -14,7 +14,6 @@ import {
   View,
 } from 'react-native';
 
-import { BottomNav } from '@/components/BottomNav';
 import { useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
@@ -239,7 +238,6 @@ export default function ReportScreen() {
           ))}
         </View>
       </ScrollView>
-      <BottomNav activeTab="report" />
       <HazardDetailsSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
     </SafeAreaView>
   );

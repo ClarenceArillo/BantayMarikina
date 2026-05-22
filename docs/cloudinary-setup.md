@@ -7,7 +7,15 @@ BantayMarikina uploads report images, report videos, and profile photos to Cloud
 Set this only on trusted backend runtimes, never in `frontend/.env`:
 
 ```env
-CLOUDINARY_URL=cloudinary://<api_key>:<api_secret>@dk0nn4eqt
+CLOUDINARY_CLOUD_NAME=dk0nn4eqt
+CLOUDINARY_API_KEY=477669543775514
+CLOUDINARY_API_SECRET=<your_api_secret>
+```
+
+You can also use the single URL format:
+
+```env
+CLOUDINARY_URL=cloudinary://477669543775514:<your_api_secret>@dk0nn4eqt
 ```
 
 The Cloudinary API key may be returned to the app for signed uploads, but the API secret must stay on the backend or Firebase Functions.
@@ -28,6 +36,16 @@ The Cloudinary API key may be returned to the app for signed uploads, but the AP
 
 ## Deployment
 
-- Backend: add `CLOUDINARY_URL` to the Node/Express environment.
-- Firebase Functions: add `CLOUDINARY_URL` as a runtime environment variable before deploying cleanup triggers.
+- Backend: add either `CLOUDINARY_URL` or the three separate Cloudinary variables to the Node/Express environment.
+- Firebase Functions: add the same Cloudinary values as runtime environment variables before deploying cleanup triggers.
 - Frontend: keep only public Expo/Firebase/API values in `frontend/.env`.
+
+## Manual Cloudinary Setup
+
+1. Open the Cloudinary Console and select cloud `dk0nn4eqt`.
+2. Go to Dashboard, then copy the API Secret for API key `477669543775514`.
+3. Add the secret to `backend/.env` as `CLOUDINARY_API_SECRET=...`.
+4. Add the same Cloudinary values to Firebase Functions runtime config or environment variables.
+5. Restart the backend server so `/api/media/cloudinary/sign-upload` uses the new secret.
+6. Test by uploading a profile photo or report image. Successful uploads should appear under `profiles`, `reports/images`, or `reports/videos`.
+7. If uploads fail, call `GET /api/media/cloudinary/status` with a Firebase bearer token. It should return `connected: true` and `hasApiSecret: true`.

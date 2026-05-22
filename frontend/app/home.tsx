@@ -14,7 +14,6 @@ import {
 import type { ImageSourcePropType, ImageStyle, StyleProp } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
-import { BottomNav } from '@/components/BottomNav';
 import { AppIcon, Badge, EmergencyCard, PressScale, RiskBanner, SectionHeader, SoftCard, ThemeToggle, useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
@@ -337,7 +336,6 @@ export default function HomeDashboard() {
         </Text>
       </ScrollView>
 
-      <BottomNav activeTab="home" />
       <HazardDetailsSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
     </SafeAreaView>
   );

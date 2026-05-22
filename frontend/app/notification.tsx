@@ -2,7 +2,6 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { BottomNav } from '@/components/BottomNav';
 import { useAppTheme } from '@/components/EmergencyUI';
 import { NotificationCard } from '@/components/NotificationCard';
 import { ReportFilterBar } from '@/components/ReportFilterBar';
@@ -102,7 +101,6 @@ export default function NotificationScreen() {
           </View>
         ))}
       </ScrollView>
-      <BottomNav activeTab="notification" />
     </SafeAreaView>
   );
 }

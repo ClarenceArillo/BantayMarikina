@@ -1,9 +1,20 @@
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 
+import { BottomNav } from '@/components/BottomNav';
 import { AuthSessionProvider } from '@/context/auth-context';
 import { SignupProvider } from '@/context/signup-context';
 import { AppThemeProvider, useTheme } from '@/theme/ThemeProvider';
+
+type MainTab = 'home' | 'map' | 'report' | 'notification' | 'profile';
+
+function getActiveTab(pathname: string): MainTab | null {
+  const route = pathname.replace(/^\//, '').split('/')[0];
+  if (route === 'home' || route === 'map' || route === 'report' || route === 'notification' || route === 'profile') {
+    return route;
+  }
+  return null;
+}
 
 export default function RootLayout() {
   return (
@@ -19,6 +30,7 @@ export default function RootLayout() {
 
 function ThemedStack() {
   const { colors, isDark } = useTheme();
+  const activeTab = getActiveTab(usePathname());
 
   return (
     <>
@@ -39,6 +51,7 @@ function ThemedStack() {
         <Stack.Screen name="signup/address" />
         <Stack.Screen name="signup/security" />
       </Stack>
+      {activeTab ? <BottomNav activeTab={activeTab} /> : null}
       <StatusBar style={isDark ? 'light' : 'dark'} />
     </>
   );
