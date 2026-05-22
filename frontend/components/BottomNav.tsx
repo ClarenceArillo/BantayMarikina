@@ -22,8 +22,8 @@ const iconSources = {
     dark: { inactive: require('@/assets/Icons/Map.png'), active: require('@/assets/Icons/Map (2).png') },
   },
   report: {
-    light: { inactive: require('@/assets/Icons/Flag.png'), active: require('@/assets/Icons/RedFlag.png') },
-    dark: { inactive: require('@/assets/Icons/Flag.png'), active: require('@/assets/Icons/RedFlag.png') },
+    light: { inactive: require('@/assets/Icons/HazardReport.png'), active: require('@/assets/Icons/Report.png') },
+    dark: { inactive: require('@/assets/Icons/HazardReport.png'), active: require('@/assets/Icons/Report.png') },
   },
   notification: {
     light: { inactive: require('@/assets/Icons/Notification.png'), active: require('@/assets/Icons/Notification-Active.png') },

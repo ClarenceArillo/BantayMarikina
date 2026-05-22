@@ -18,6 +18,7 @@ app.use(express.json());
 // Routes
 const reportsRouter = require('./routes/reports');
 const usersRouter = require('./routes/users');
+const mediaRouter = require('./routes/media');
 const weatherRouter = require('./routes/weather');
 const waterLevelRouter = require('./routes/waterlevel');
 
@@ -27,6 +28,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
+app.use('/api/media', mediaRouter);
 app.use('/api/weather', weatherRouter);
 app.use('/api/waterlevel', waterLevelRouter);
 

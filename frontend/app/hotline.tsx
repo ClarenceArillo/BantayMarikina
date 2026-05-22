@@ -16,17 +16,14 @@ import { AppIcon, Badge, EmergencyCard, PressScale, SectionHeader, SoftCard, use
 import { Radius, Spacing, Typography } from '@/constants/theme';
 
 const iconSources = {
-  alert: require('@/assets/Icons/Alert.png'),
-  arrow: require('@/assets/Icons/Arrow.png'),
-  check: require('@/assets/Icons/Check.png'),
-  cross: require('@/assets/Icons/Cross.png'),
-  gears: require('@/assets/Icons/Gears.png'),
-  hardhat: require('@/assets/Icons/Hardhat.png'),
+  alert: require('@/assets/Icons/FireDep.png'),
+  cross: require('@/assets/Icons/HealthDep.png'),
+  hardhat: require('@/assets/Icons/EngineeringDep.png'),
   hotline: require('@/assets/Icons/Hotline.png'),
-  pillar: require('@/assets/Icons/Pillar.png'),
-  profile: require('@/assets/Icons/Profile.png'),
-  safetyTips: require('@/assets/Icons/SafetyTipsRed.png'),
-  shield: require('@/assets/Icons/Shield.png'),
+  pillar: require('@/assets/Icons/Office.png'),
+  profile: require('@/assets/Icons/DSWD.png'),
+  safetyTips: require('@/assets/Icons/SafetyTips.png'),
+  shield: require('@/assets/Icons/PolicePNPDep.png'),
 };
 
 const emergencyNumbers = [

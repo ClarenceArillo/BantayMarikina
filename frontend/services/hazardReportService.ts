@@ -3,6 +3,7 @@ import {
   addDoc,
   collection,
   doc,
+  getDocs,
   increment,
   limit,
   onSnapshot,
@@ -18,9 +19,9 @@ import {
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 
 import { getFirebaseClients } from '@/config/firebase';
+import { deleteCloudinaryMedia, uploadToCloudinary, cloudinaryOptimizedUrl, cloudinaryVideoPosterUrl } from '@/services/cloudinaryService';
 import type {
   HazardReport,
   HazardReportInput,
@@ -74,6 +75,9 @@ function normalizeReport(doc: QueryDocumentSnapshot<DocumentData>): HazardReport
 
   if (latitude === null || longitude === null) return null;
 
+  const media = data.media || (data.cloudinaryMedia ? [data.cloudinaryMedia] : []);
+  const firstMedia = media[0];
+
   return {
     id: doc.id,
     title: data.title || data.headline || data.hazardType || data.hazard_type || 'Community report',
@@ -86,7 +90,11 @@ function normalizeReport(doc: QueryDocumentSnapshot<DocumentData>): HazardReport
     reporterName: data.reporterName,
     severity: data.severity,
     barangay: data.barangay,
-    imageUrl: data.imageUrl || data.image_url,
+    imageUrl: firstMedia?.resource_type === 'video'
+      ? cloudinaryVideoPosterUrl(firstMedia.secure_url)
+      : cloudinaryOptimizedUrl(data.imageUrl || data.image_url || firstMedia?.secure_url),
+    media,
+    reporterPhotoUrl: cloudinaryOptimizedUrl(data.reporterPhotoUrl || data.reporter_photo_url || data.userPhotoUrl, 160),
     status: data.status || 'active',
     source: data.source || 'community',
     moderationStatus: data.moderationStatus || (data.status === 'rejected' ? 'removed' : 'visible'),
@@ -105,6 +113,7 @@ function normalizeComment(doc: QueryDocumentSnapshot<DocumentData>): ReportComme
     id: doc.id,
     userId: data.userId || '',
     userName: data.userName || 'Resident',
+    userPhotoUrl: cloudinaryOptimizedUrl(data.userPhotoUrl, 96),
     body: data.body || '',
     createdAt: toDate(data.createdAt),
   };
@@ -216,28 +225,37 @@ export function validateHazardReport(input: HazardReportInput) {
   }
 }
 
-async function uploadReportImage(imageUri: string, userId?: string) {
-  const { storage } = getFirebaseClients();
-  const response = await fetch(imageUri);
-  const blob = await response.blob();
-  const extension = imageUri.split('.').pop()?.split('?')[0] || 'jpg';
-  const imageRef = ref(storage, `hazard-reports/${userId || 'anonymous'}/${Date.now()}.${extension}`);
-
-  await uploadBytes(imageRef, blob, {
-    contentType: blob.type || 'image/jpeg',
-  });
-
-  return getDownloadURL(imageRef);
-}
-
 export async function submitHazardReport(input: HazardReportInput) {
   validateHazardReport(input);
 
   const { db } = getFirebaseClients();
-  const imageUrl = input.imageUri ? await uploadReportImage(input.imageUri, input.userId) : null;
+  if (input.userId) {
+    const recentSnapshot = await getDocs(query(
+      collection(db, REPORTS_COLLECTION),
+      where('userId', '==', input.userId),
+      orderBy('timestamp', 'desc'),
+      limit(1)
+    ));
+    const lastReportAt = recentSnapshot.docs[0] ? toDate(recentSnapshot.docs[0].data().timestamp || recentSnapshot.docs[0].data().createdAt) : null;
+    if (lastReportAt && Date.now() - lastReportAt.getTime() < 60_000) {
+      throw new Error('Please wait a minute before submitting another report.');
+    }
+  }
+  const mediaResourceType = input.mediaType === 'video' ? 'video' : 'image';
+  const cloudinaryMedia = input.imageUri && input.idToken
+    ? await uploadToCloudinary({
+        folder: mediaResourceType === 'video' ? 'reports/videos' : 'reports/images',
+        idToken: input.idToken,
+        mediaUri: input.imageUri,
+        onProgress: input.onUploadProgress,
+        resourceType: mediaResourceType,
+      })
+    : null;
+  const imageUrl = cloudinaryMedia?.secure_url || null;
   const title = `${input.severity} ${input.hazardType}`;
 
-  const reportRef = await addDoc(collection(db, REPORTS_COLLECTION), {
+  try {
+    const reportRef = await addDoc(collection(db, REPORTS_COLLECTION), {
     title,
     hazardType: input.hazardType,
     hazard_type: input.hazardType,
@@ -250,8 +268,12 @@ export async function submitHazardReport(input: HazardReportInput) {
     userId: input.userId || null,
     sender_id: input.userId || null,
     reporterName: input.reporterName || '',
+    reporterPhotoUrl: input.reporterPhotoUrl || '',
+    reporter_photo_url: input.reporterPhotoUrl || '',
     imageUrl,
     image_url: imageUrl,
+    cloudinaryMedia,
+    media: cloudinaryMedia ? [cloudinaryMedia] : [],
     source: 'community',
     moderationStatus: 'visible',
     likeCount: 0,
@@ -262,9 +284,9 @@ export async function submitHazardReport(input: HazardReportInput) {
     timestamp: serverTimestamp(),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-  });
+    });
 
-  await addDoc(collection(db, NOTIFICATIONS_COLLECTION), {
+    await addDoc(collection(db, NOTIFICATIONS_COLLECTION), {
     audience: 'all',
     type: 'new_report',
     reportId: reportRef.id,
@@ -277,10 +299,17 @@ export async function submitHazardReport(input: HazardReportInput) {
     longitude: input.longitude,
     barangay: input.barangay || '',
     reporterName: input.reporterName || 'Resident',
+    reporterPhotoUrl: input.reporterPhotoUrl || '',
     createdAt: serverTimestamp(),
-  });
+    });
 
-  return reportRef;
+    return reportRef;
+  } catch (error) {
+    if (cloudinaryMedia?.public_id && input.idToken) {
+      deleteCloudinaryMedia(input.idToken, cloudinaryMedia.public_id, mediaResourceType, input.userId).catch(() => undefined);
+    }
+    throw error;
+  }
 }
 
 export function subscribeToHazardReports(
@@ -483,7 +512,7 @@ export async function toggleReportLike(reportId: string, userId: string) {
   });
 }
 
-export async function addReportComment(reportId: string, userId: string, userName: string, body: string) {
+export async function addReportComment(reportId: string, userId: string, userName: string, body: string, userPhotoUrl = '') {
   const cleanBody = body.trim();
   if (cleanBody.length < 2) throw new Error('Please add a longer comment.');
   if (cleanBody.length > 400) throw new Error('Comments are limited to 400 characters.');
@@ -492,6 +521,7 @@ export async function addReportComment(reportId: string, userId: string, userNam
   await addDoc(collection(db, REPORTS_COLLECTION, reportId, 'comments'), {
     userId,
     userName: userName || 'Resident',
+    userPhotoUrl,
     body: cleanBody,
     createdAt: serverTimestamp(),
   });

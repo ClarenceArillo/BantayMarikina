@@ -1,4 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,19 +18,22 @@ import {
 
 import { BottomNav } from '@/components/BottomNav';
 import { useAppTheme } from '@/components/EmergencyUI';
+import { getFirebaseClients } from '@/config/firebase';
 import { useAuthSession } from '@/context/auth-context';
 import {
+  changeCurrentPassword,
   getCurrentUserProfile,
+  updateCurrentUsername,
   UserProfileResponse,
   updateCurrentUserProfile,
 } from '@/services/authService';
 import { ensureFirebaseSession } from '@/services/firebaseSession';
-import { uploadUserProfilePhoto } from '@/services/profilePhotoService';
+import { removeUserProfilePhoto, uploadUserProfilePhoto } from '@/services/profilePhotoService';
 
 const logo = require('@/assets/Logo/BantayMarikinaLogo.png');
 const defaultProfile = require('@/assets/Icons/Default Profile.png');
 const cameraIcon = require('@/assets/Icons/Camera.png');
-const penIcon = require('@/assets/Icons/Pen.png');
+const penIcon = require('@/assets/Icons/EditIcon.png');
 
 type ProfileForm = {
   barangay: string;
@@ -111,7 +116,7 @@ function ProfileField({
 
 export default function ProfileScreen() {
   const theme = useAppTheme();
-  const { profilePhotoUri, session, setProfilePhotoUri, updateSessionProfile } = useAuthSession();
+  const { profilePhotoUri, session, setProfilePhotoUri, setSession, updateSessionProfile } = useAuthSession();
   const idToken = session?.idToken ?? '';
   const fallbackName = session?.full_name ?? '';
   const [isEditing, setIsEditing] = useState(false);
@@ -119,6 +124,10 @@ export default function ProfileScreen() {
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [form, setForm] = useState<ProfileForm>(() => toForm());
+  const [username, setUsername] = useState(session?.username || '');
+  const [passwordForm, setPasswordForm] = useState({ current: '', next: '', confirm: '' });
+  const [showPasswords, setShowPasswords] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
 
   const fullName = useMemo(() => buildFullName(form, fallbackName), [fallbackName, form]);
@@ -140,6 +149,7 @@ export default function ProfileScreen() {
       setError('');
       const profile = await getCurrentUserProfile(idToken);
       setForm(toForm(profile));
+      setUsername(profile.username || '');
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load profile.');
     } finally {
@@ -178,14 +188,38 @@ export default function ProfileScreen() {
       try {
         setIsUploadingPhoto(true);
         await ensureFirebaseSession(idToken);
-        const remoteUri = await uploadUserProfilePhoto(session.uid, localUri);
+        const remoteUri = await uploadUserProfilePhoto(session.uid, idToken, localUri, setUploadProgress);
         setProfilePhotoUri(remoteUri);
       } catch (uploadError) {
         Alert.alert('Photo not saved', uploadError instanceof Error ? uploadError.message : 'Please try again.');
       } finally {
         setIsUploadingPhoto(false);
+        setUploadProgress(0);
       }
     }
+  };
+
+  const removeProfilePhoto = () => {
+    if (!idToken || !session?.uid || !profilePhotoUri) return;
+    Alert.alert('Remove profile picture?', 'Your account will use the default profile image.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Remove',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setIsUploadingPhoto(true);
+            await ensureFirebaseSession(idToken);
+            await removeUserProfilePhoto(session.uid, idToken);
+            setProfilePhotoUri('');
+          } catch (removeError) {
+            Alert.alert('Photo not removed', removeError instanceof Error ? removeError.message : 'Please try again.');
+          } finally {
+            setIsUploadingPhoto(false);
+          }
+        },
+      },
+    ]);
   };
 
   const saveProfile = async () => {
@@ -223,6 +257,80 @@ export default function ProfileScreen() {
     }
   };
 
+  const saveUsername = async () => {
+    if (!idToken) return;
+    try {
+      setIsSaving(true);
+      const updated = await updateCurrentUsername(idToken, username.trim());
+      updateSessionProfile(updated);
+      setUsername(updated.username);
+      Alert.alert('Username updated', 'Your new username is now live across the app.');
+    } catch (requestError) {
+      Alert.alert('Username not saved', requestError instanceof Error ? requestError.message : 'Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const passwordStrengthError = useMemo(() => {
+    if (!passwordForm.next) return '';
+    if (passwordForm.next.length < 8) return 'Use at least 8 characters.';
+    if (!/[A-Z]/.test(passwordForm.next) || !/[a-z]/.test(passwordForm.next) || !/[0-9]/.test(passwordForm.next)) {
+      return 'Use uppercase, lowercase, and a number.';
+    }
+    if (passwordForm.next !== passwordForm.confirm) return 'Passwords do not match.';
+    return '';
+  }, [passwordForm.confirm, passwordForm.next]);
+
+  const savePassword = () => {
+    if (!idToken || passwordStrengthError) {
+      Alert.alert('Password not ready', passwordStrengthError || 'Secure profile session is unavailable.');
+      return;
+    }
+
+    Alert.alert('Change password?', 'You will need this new password the next time you log in.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Change',
+        onPress: async () => {
+          try {
+            setIsSaving(true);
+            await changeCurrentPassword(idToken, {
+              current_password: passwordForm.current,
+              new_password: passwordForm.next,
+              confirm_password: passwordForm.confirm,
+            });
+            setPasswordForm({ current: '', next: '', confirm: '' });
+            Alert.alert('Password changed', 'Your Firebase Auth password was updated securely.');
+          } catch (requestError) {
+            Alert.alert('Password not changed', requestError instanceof Error ? requestError.message : 'Please try again.');
+          } finally {
+            setIsSaving(false);
+          }
+        },
+      },
+    ]);
+  };
+
+  const logout = () => {
+    Alert.alert('Log out?', 'Your live listeners will close and this device will return to login.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: async () => {
+          await getFirebaseClients().auth.signOut().catch(() => undefined);
+          if (session?.uid) {
+            await AsyncStorage.removeItem(`bantay.profile.photo.${session.uid}`).catch(() => undefined);
+          }
+          setProfilePhotoUri('');
+          setSession(null);
+          router.replace('/' as never);
+        },
+      },
+    ]);
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -239,7 +347,11 @@ export default function ProfileScreen() {
               )}
             </Pressable>
           </View>
+          {isUploadingPhoto && uploadProgress ? (
+            <Text style={[styles.uploadText, { color: theme.primary }]}>Uploading {uploadProgress}%</Text>
+          ) : null}
           <Text style={[styles.fullName, { color: theme.text }]}>{fullName}</Text>
+          <Text style={[styles.usernameText, { color: theme.muted }]}>@{session?.username || username || 'resident'}</Text>
         </View>
 
         <Pressable style={styles.editButton} onPress={saveProfile} disabled={isSaving || isLoading}>
@@ -287,6 +399,71 @@ export default function ProfileScreen() {
             <Pressable style={[styles.nextButton, { backgroundColor: theme.primary }]} onPress={saveProfile} disabled={isSaving}>
               <Text style={styles.nextText}>{isSaving ? 'Saving...' : isEditing ? 'Save' : 'Next'}</Text>
             </Pressable>
+
+            <View style={[styles.settingsCard, { backgroundColor: theme.surface, borderColor: theme.borderSoft }]}>
+              <Text style={[styles.settingsTitle, { color: theme.text }]}>Account Settings</Text>
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.label, { color: theme.text }]}>Username</Text>
+                <View style={styles.inlineRow}>
+                  <TextInput
+                    autoCapitalize="none"
+                    onChangeText={setUsername}
+                    placeholderTextColor={theme.placeholder}
+                    style={[styles.compactInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.text }]}
+                    value={username}
+                  />
+                  <Pressable style={[styles.smallButton, { backgroundColor: theme.primary }]} onPress={saveUsername} disabled={isSaving}>
+                    <Text style={styles.smallButtonText}>Save</Text>
+                  </Pressable>
+                </View>
+              </View>
+
+              <View style={styles.fieldGroup}>
+                <View style={styles.passwordHeader}>
+                  <Text style={[styles.label, { color: theme.text }]}>Password</Text>
+                  <Pressable onPress={() => setShowPasswords((current) => !current)}>
+                    <Text style={[styles.linkText, { color: theme.primary }]}>{showPasswords ? 'Hide' : 'Show'}</Text>
+                  </Pressable>
+                </View>
+                <TextInput
+                  onChangeText={(value) => setPasswordForm((current) => ({ ...current, current: value }))}
+                  placeholder="Current password"
+                  placeholderTextColor={theme.placeholder}
+                  secureTextEntry={!showPasswords}
+                  style={[styles.compactInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.text }]}
+                  value={passwordForm.current}
+                />
+                <TextInput
+                  onChangeText={(value) => setPasswordForm((current) => ({ ...current, next: value }))}
+                  placeholder="New password"
+                  placeholderTextColor={theme.placeholder}
+                  secureTextEntry={!showPasswords}
+                  style={[styles.compactInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.text }]}
+                  value={passwordForm.next}
+                />
+                <TextInput
+                  onChangeText={(value) => setPasswordForm((current) => ({ ...current, confirm: value }))}
+                  placeholder="Confirm new password"
+                  placeholderTextColor={theme.placeholder}
+                  secureTextEntry={!showPasswords}
+                  style={[styles.compactInput, { backgroundColor: theme.input, borderColor: theme.border, color: theme.text }]}
+                  value={passwordForm.confirm}
+                />
+                {passwordStrengthError ? <Text style={[styles.helperText, { color: theme.danger }]}>{passwordStrengthError}</Text> : null}
+                <Pressable style={[styles.outlineButton, { borderColor: theme.primary }]} onPress={savePassword} disabled={isSaving}>
+                  <Text style={[styles.outlineText, { color: theme.primary }]}>Change Password</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.inlineRow}>
+                <Pressable style={[styles.outlineButton, styles.flexButton, { borderColor: theme.danger }]} onPress={removeProfilePhoto} disabled={isUploadingPhoto || !profilePhotoUri}>
+                  <Text style={[styles.outlineText, { color: theme.danger }]}>Remove Photo</Text>
+                </Pressable>
+                <Pressable style={[styles.logoutButton, styles.flexButton, { backgroundColor: theme.danger }]} onPress={logout}>
+                  <Text style={styles.logoutText}>Logout</Text>
+                </Pressable>
+              </View>
+            </View>
           </>
         )}
       </ScrollView>
@@ -345,6 +522,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 10,
     textAlign: 'center',
+  },
+  usernameText: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 3,
+  },
+  uploadText: {
+    fontSize: 11,
+    fontWeight: '900',
+    marginTop: 8,
   },
   editButton: {
     alignItems: 'center',
@@ -408,5 +595,81 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '800',
+  },
+  settingsCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 14,
+    marginTop: 18,
+    padding: 14,
+  },
+  settingsTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  compactInput: {
+    borderRadius: 13,
+    borderWidth: 1,
+    flex: 1,
+    fontSize: 14,
+    minHeight: 46,
+    paddingHorizontal: 14,
+  },
+  inlineRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  smallButton: {
+    alignItems: 'center',
+    borderRadius: 13,
+    height: 46,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+  },
+  smallButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  passwordHeader: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  linkText: {
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  helperText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  outlineButton: {
+    alignItems: 'center',
+    borderRadius: 13,
+    borderWidth: 1,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  outlineText: {
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  flexButton: {
+    flex: 1,
+  },
+  logoutButton: {
+    alignItems: 'center',
+    borderRadius: 13,
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  logoutText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
   },
 });

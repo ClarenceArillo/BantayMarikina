@@ -138,7 +138,16 @@ service cloud.firestore {
     }
 
     match /Users/{userId} {
-      allow read, update: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'photoURL',
+          'profilePhotoUrl',
+          'profile_photo_url',
+          'profilePhotoMedia',
+          'updated_at'
+        ]);
       allow create: if false;
     }
   }

@@ -30,7 +30,7 @@ function dateBucket(date: Date | null) {
 }
 
 function groupNotifications(notifications: ReportNotification[]) {
-  return notifications.reduce<Array<{ title: string; items: ReportNotification[] }>>((groups, notification) => {
+  return notifications.reduce<{ title: string; items: ReportNotification[] }[]>((groups, notification) => {
     const title = dateBucket(notification.createdAt);
     const group = groups.find((item) => item.title === title);
 

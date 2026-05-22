@@ -28,7 +28,6 @@ import { submitHazardReport } from '@/services/hazardReportService';
 import { HAZARD_TYPES, SEVERITY_LEVELS, type HazardReport, type HazardSeverity, type HazardType, type ReportFilters } from '@/types/hazard';
 
 const iconSources = {
-  arrow: require('@/assets/Icons/Arrow.png'),
   camera: require('@/assets/Icons/Camera.png'),
   pin: require('@/assets/Icons/Pin.png'),
 };
@@ -41,6 +40,8 @@ export default function ReportScreen() {
   const [severity, setSeverity] = useState<HazardSeverity>('Moderate');
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
   const [filters, setFilters] = useState<ReportFilters>({ dateRange: 'month', hazardType: 'All', severity: 'All', status: 'All', source: 'All' });
@@ -70,12 +71,14 @@ export default function ReportScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
       aspect: [4, 3],
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       quality: 0.72,
+      videoMaxDuration: 30,
     });
 
     if (!result.canceled) {
       setImageUri(result.assets[0].uri);
+      setMediaType(result.assets[0].type === 'video' ? 'video' : 'image');
     }
   }
 
@@ -93,9 +96,13 @@ export default function ReportScreen() {
         longitude: currentLocation.coords.longitude,
         accuracyMeters: currentLocation.coords.accuracy,
         barangay,
+        idToken: session?.idToken,
         userId: session?.uid,
         reporterName: session?.full_name,
+        reporterPhotoUrl: session?.profile?.profilePhotoUrl || session?.profile?.profile_photo_url || session?.profile?.photoURL,
         imageUri: imageUri || undefined,
+        mediaType,
+        onUploadProgress: setUploadProgress,
       });
 
       Alert.alert('Report submitted', 'Your hazard report is now visible on the live map.');
@@ -104,6 +111,7 @@ export default function ReportScreen() {
       Alert.alert('Unable to submit report', submitError instanceof Error ? submitError.message : 'Please try again.');
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(0);
     }
   }
 
@@ -112,7 +120,7 @@ export default function ReportScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
           <Pressable style={[styles.backButton, { backgroundColor: theme.primaryTint }]} onPress={() => router.back()}>
-            <Image source={iconSources.arrow} style={[styles.backIcon, { tintColor: theme.primary }]} resizeMode="contain" />
+            <Text style={[styles.backText, { color: theme.primary }]}>{'<'}</Text>
           </Pressable>
           <View>
             <Text style={[styles.title, { color: theme.text }]}>Report Hazard</Text>
@@ -191,24 +199,32 @@ export default function ReportScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.text }]}>Optional Image</Text>
+          <Text style={[styles.label, { color: theme.text }]}>Optional Media</Text>
           <Pressable style={[styles.imagePicker, { backgroundColor: theme.input, borderColor: theme.border }]} onPress={pickImage}>
             {imageUri ? (
               <Image source={{ uri: imageUri }} style={styles.previewImage} />
             ) : (
               <>
                 <Image source={iconSources.camera} style={[styles.cameraIcon, { tintColor: theme.primary }]} resizeMode="contain" />
-                <Text style={[styles.imagePickerText, { color: theme.primary }]}>Attach photo</Text>
+                <Text style={[styles.imagePickerText, { color: theme.primary }]}>Attach photo or video</Text>
               </>
             )}
           </Pressable>
+          {imageUri ? (
+            <Text style={[styles.counter, { color: theme.muted }]}>{mediaType === 'video' ? 'Video attached, max 30 seconds' : 'Image compressed before upload'}</Text>
+          ) : null}
         </View>
 
         <Pressable
           style={[styles.submitButton, { backgroundColor: theme.primary }, isSubmitting ? styles.submitDisabled : null]}
           disabled={isSubmitting}
           onPress={handleSubmit}>
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit Live Report</Text>}
+          {isSubmitting ? (
+            <View style={styles.submitProgress}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.submitText}>{uploadProgress ? `Uploading ${uploadProgress}%` : 'Submitting...'}</Text>
+            </View>
+          ) : <Text style={styles.submitText}>Submit Live Report</Text>}
         </Pressable>
 
         <View style={styles.feedSection}>
@@ -251,9 +267,10 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '180deg' }],
     width: 38,
   },
-  backIcon: {
-    height: 18,
-    width: 18,
+  backText: {
+    fontSize: 30,
+    fontWeight: '800',
+    lineHeight: 32,
   },
   title: {
     fontSize: 24,
@@ -381,6 +398,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '900',
+  },
+  submitProgress: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   feedSection: {
     gap: 12,

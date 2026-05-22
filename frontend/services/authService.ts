@@ -124,6 +124,12 @@ export type UpdateProfilePayload = {
   house_number?: string;
 };
 
+export type ChangePasswordPayload = {
+  current_password: string;
+  new_password: string;
+  confirm_password: string;
+};
+
 async function request<T>(path: string, options: RequestInit): Promise<T> {
   let response: Response;
 
@@ -191,6 +197,20 @@ export function getCurrentUserProfile(idToken: string) {
 
 export function updateCurrentUserProfile(idToken: string, payload: UpdateProfilePayload) {
   return requestWithAuth<UserProfileResponse>('/users/me', idToken, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateCurrentUsername(idToken: string, username: string) {
+  return requestWithAuth<UserProfileResponse>('/users/me/username', idToken, {
+    method: 'PATCH',
+    body: JSON.stringify({ username }),
+  });
+}
+
+export function changeCurrentPassword(idToken: string, payload: ChangePasswordPayload) {
+  return requestWithAuth<{ message: string }>('/users/me/password', idToken, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });

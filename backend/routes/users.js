@@ -258,6 +258,89 @@ router.patch('/me', requireAuthenticatedUser, async (req, res) => {
   }
 });
 
+router.patch('/me/username', requireAuthenticatedUser, async (req, res) => {
+  try {
+    const cleanUsername = normalizeUsername(req.body.username);
+    const usernameLower = normalizeUsernameKey(cleanUsername);
+
+    if (!/^[a-zA-Z0-9._-]{3,24}$/.test(cleanUsername)) {
+      return res.status(400).json({ error: 'Username must be 3-24 letters, numbers, dots, dashes, or underscores.' });
+    }
+
+    const existing = await db.collection('Users')
+      .where('username_lower', '==', usernameLower)
+      .limit(1)
+      .get();
+
+    if (!existing.empty && existing.docs[0].id !== req.auth.uid) {
+      return res.status(400).json({ error: 'Username already taken' });
+    }
+
+    const userRef = db.collection('Users').doc(req.auth.uid);
+    await userRef.update({
+      username: cleanUsername,
+      username_lower: usernameLower,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const userDoc = await userRef.get();
+    return res.json(buildProfileResponse(req.auth.uid, userDoc.data()));
+  } catch (error) {
+    logAuthError('Update username', error);
+    return res.status(500).json({ error: 'Unable to update username' });
+  }
+});
+
+router.patch('/me/password', requireAuthenticatedUser, async (req, res) => {
+  try {
+    const currentPassword = String(req.body.current_password || '');
+    const newPassword = String(req.body.new_password || '');
+    const confirmPassword = String(req.body.confirm_password || '');
+    const user = await admin.auth().getUser(req.auth.uid);
+    const firebaseApiKey = getFirebaseApiKey();
+
+    if (!firebaseApiKey) {
+      return res.status(500).json({ error: 'FIREBASE_WEB_API_KEY is required for password changes' });
+    }
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: 'Current password, new password, and confirmation are required.' });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'New passwords do not match.' });
+    }
+
+    if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ error: 'Use at least 8 characters with uppercase, lowercase, and a number.' });
+    }
+
+    await axios.post(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
+      {
+        email: user.email,
+        password: currentPassword,
+        returnSecureToken: true,
+      }
+    );
+
+    await admin.auth().updateUser(req.auth.uid, { password: newPassword });
+    await db.collection('Users').doc(req.auth.uid).update({
+      password_updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    logAuthError('Update password', error);
+    const firebaseMessage = error.response?.data?.error?.message;
+    if (firebaseMessage === 'INVALID_PASSWORD' || firebaseMessage === 'INVALID_LOGIN_CREDENTIALS') {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+    return res.status(500).json({ error: getAuthErrorMessage(error) || 'Unable to update password' });
+  }
+});
+
 // Register
 router.post('/register', async (req, res) => {
   try {

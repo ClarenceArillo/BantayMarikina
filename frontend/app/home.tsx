@@ -35,7 +35,6 @@ import type { HazardReport } from '@/types/hazard';
 
 const defaultProfile = require('@/assets/Icons/Default Profile.png');
 const iconSources = {
-  alert: require('@/assets/Icons/Alert.png'),
   bantayLogo: require('@/assets/Icons/BantayLogo.png'),
   cloudyDay: require('@/assets/Icons/CloudyDay.png'),
   evacuation: require('@/assets/Icons/Evacuation.png'),
