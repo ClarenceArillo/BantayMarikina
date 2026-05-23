@@ -22,6 +22,7 @@ import {
 
 import { getFirebaseClients } from '@/config/firebase';
 import { deleteCloudinaryMedia, uploadToCloudinary, cloudinaryOptimizedUrl, cloudinaryVideoPosterUrl } from '@/services/cloudinaryService';
+import { subscribeWithRetry } from '@/services/realtime';
 import type {
   HazardReport,
   HazardReportInput,
@@ -49,6 +50,8 @@ const MARIKINA_BOUNDS = {
   minLng: 121.03,
   maxLng: 121.18,
 };
+const RECENT_REPORT_COOLDOWN_MS = 60_000;
+const recentSubmitChecks = new Map<string, number>();
 
 function toDate(value: unknown) {
   if (!value) return null;
@@ -230,6 +233,11 @@ export async function submitHazardReport(input: HazardReportInput) {
 
   const { db } = getFirebaseClients();
   if (input.userId) {
+    const lastLocalSubmitAt = recentSubmitChecks.get(input.userId) || 0;
+    if (Date.now() - lastLocalSubmitAt < RECENT_REPORT_COOLDOWN_MS) {
+      throw new Error('Please wait a minute before submitting another report.');
+    }
+
     const recentSnapshot = await getDocs(query(
       collection(db, REPORTS_COLLECTION),
       where('userId', '==', input.userId),
@@ -237,7 +245,8 @@ export async function submitHazardReport(input: HazardReportInput) {
       limit(1)
     ));
     const lastReportAt = recentSnapshot.docs[0] ? toDate(recentSnapshot.docs[0].data().timestamp || recentSnapshot.docs[0].data().createdAt) : null;
-    if (lastReportAt && Date.now() - lastReportAt.getTime() < 60_000) {
+    if (lastReportAt && Date.now() - lastReportAt.getTime() < RECENT_REPORT_COOLDOWN_MS) {
+      recentSubmitChecks.set(input.userId, lastReportAt.getTime());
       throw new Error('Please wait a minute before submitting another report.');
     }
   }
@@ -247,6 +256,7 @@ export async function submitHazardReport(input: HazardReportInput) {
         folder: mediaResourceType === 'video' ? 'reports/videos' : 'reports/images',
         idToken: input.idToken,
         mediaUri: input.imageUri,
+        mediaSizeBytes: input.mediaSizeBytes,
         onProgress: input.onUploadProgress,
         resourceType: mediaResourceType,
       })
@@ -286,7 +296,7 @@ export async function submitHazardReport(input: HazardReportInput) {
     updatedAt: serverTimestamp(),
     });
 
-    await addDoc(collection(db, NOTIFICATIONS_COLLECTION), {
+    await setDoc(doc(db, NOTIFICATIONS_COLLECTION, `report_${reportRef.id}`), {
     audience: 'all',
     type: 'new_report',
     reportId: reportRef.id,
@@ -303,6 +313,7 @@ export async function submitHazardReport(input: HazardReportInput) {
     createdAt: serverTimestamp(),
     });
 
+    if (input.userId) recentSubmitChecks.set(input.userId, Date.now());
     return reportRef;
   } catch (error) {
     if (cloudinaryMedia?.public_id && input.idToken) {
@@ -325,17 +336,25 @@ export function subscribeToHazardReports(
     limit(maxReports)
   );
 
-  return onSnapshot(
-    reportsQuery,
-    (snapshot) => {
-      const reports = snapshot.docs
-        .map(normalizeReport)
-        .filter((report): report is HazardReport => Boolean(report))
-        .filter((report) => matchesFilters(report, filters))
-        .filter((report) => report.status !== 'resolved');
+  let lastHash = '';
 
-      onReports(reports);
-    },
+  return subscribeWithRetry(
+    (handleError) => onSnapshot(
+      reportsQuery,
+      (snapshot) => {
+        const reports = snapshot.docs
+          .map(normalizeReport)
+          .filter((report): report is HazardReport => Boolean(report))
+          .filter((report) => matchesFilters(report, filters))
+          .filter((report) => report.status !== 'resolved');
+        const nextHash = reports.map((report) => `${report.id}:${report.timestamp?.getTime() || 0}:${report.likeCount}:${report.commentCount}:${report.viewCount}:${report.userReportCount}:${report.status}:${report.moderationStatus}`).join('|');
+
+        if (nextHash === lastHash) return;
+        lastHash = nextHash;
+        onReports(reports);
+      },
+      handleError
+    ),
     onError
   );
 }
@@ -352,6 +371,8 @@ export function subscribeToNotifications(
   let userNotificationDocs: QueryDocumentSnapshot<DocumentData>[] = [];
   let readIds = new Set<string>();
   let reportsById = new Map<string, HazardReport>();
+
+  let lastHash = '';
 
   const emit = () => {
     const docsById = new Map<string, QueryDocumentSnapshot<DocumentData>>();
@@ -371,6 +392,9 @@ export function subscribeToNotifications(
       })
       .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
 
+    const nextHash = notifications.map((notification) => `${notification.id}:${notification.read}:${notification.report?.id || ''}:${notification.report?.status || ''}:${notification.report?.moderationStatus || ''}`).join('|');
+    if (nextHash === lastHash) return;
+    lastHash = nextHash;
     onNotifications(notifications);
   };
 
@@ -389,22 +413,22 @@ export function subscribeToNotifications(
   const readsQuery = query(collection(db, NOTIFICATION_READS_COLLECTION), where('userId', '==', userId));
   const reportsQuery = query(collection(db, REPORTS_COLLECTION), orderBy('timestamp', 'desc'), limit(maxNotifications));
 
-  const unsubscribePublicNotifications = onSnapshot(publicNotificationsQuery, (snapshot) => {
+  const unsubscribePublicNotifications = subscribeWithRetry((handleError) => onSnapshot(publicNotificationsQuery, (snapshot) => {
     publicNotificationDocs = snapshot.docs;
     emit();
-  }, onError);
+  }, handleError), onError);
 
-  const unsubscribeUserNotifications = onSnapshot(userNotificationsQuery, (snapshot) => {
+  const unsubscribeUserNotifications = subscribeWithRetry((handleError) => onSnapshot(userNotificationsQuery, (snapshot) => {
     userNotificationDocs = snapshot.docs;
     emit();
-  }, onError);
+  }, handleError), onError);
 
-  const unsubscribeReads = onSnapshot(readsQuery, (snapshot) => {
+  const unsubscribeReads = subscribeWithRetry((handleError) => onSnapshot(readsQuery, (snapshot) => {
     readIds = new Set(snapshot.docs.map((readDoc) => readDoc.data().notificationId || readDoc.id.split('_').slice(1).join('_')));
     emit();
-  }, onError);
+  }, handleError), onError);
 
-  const unsubscribeReports = onSnapshot(reportsQuery, (snapshot) => {
+  const unsubscribeReports = subscribeWithRetry((handleError) => onSnapshot(reportsQuery, (snapshot) => {
     reportsById = new Map(
       snapshot.docs
         .map(normalizeReport)
@@ -412,7 +436,7 @@ export function subscribeToNotifications(
         .map((report) => [report.id, report])
     );
     emit();
-  }, onError);
+  }, handleError), onError);
 
   return () => {
     unsubscribePublicNotifications();
@@ -455,31 +479,50 @@ export function subscribeToReportEngagement(
     });
   };
 
-  const unsubscribeReport = onSnapshot(doc(db, REPORTS_COLLECTION, reportId), (snapshot) => {
-    reportData = snapshot.data();
+  let lastHash = '';
+  const emitIfChanged = () => {
+    const nextHash = JSON.stringify({
+      commentIds: comments.map((comment) => `${comment.id}:${comment.createdAt?.getTime() || 0}`).join('|'),
+      commentCount: reportData?.commentCount || comments.length,
+      likeCount: reportData?.likeCount || 0,
+      likedByMe,
+      reportedByMe,
+      userReportCount: reportData?.userReportCount || 0,
+      viewCount: reportData?.viewCount || 0,
+    });
+    if (nextHash === lastHash) return;
+    lastHash = nextHash;
     emit();
-  }, onError);
+  };
 
-  const unsubscribeComments = onSnapshot(
-    query(collection(db, REPORTS_COLLECTION, reportId, 'comments'), orderBy('createdAt', 'asc'), limit(40)),
-    (snapshot) => {
-      comments = snapshot.docs.map(normalizeComment);
-      emit();
-    },
+  const unsubscribeReport = subscribeWithRetry((handleError) => onSnapshot(doc(db, REPORTS_COLLECTION, reportId), (snapshot) => {
+    reportData = snapshot.data();
+    emitIfChanged();
+  }, handleError), onError);
+
+  const unsubscribeComments = subscribeWithRetry(
+    (handleError) => onSnapshot(
+      query(collection(db, REPORTS_COLLECTION, reportId, 'comments'), orderBy('createdAt', 'asc'), limit(40)),
+      (snapshot) => {
+        comments = snapshot.docs.map(normalizeComment);
+        emitIfChanged();
+      },
+      handleError
+    ),
     onError
   );
 
   const unsubscribers = [unsubscribeReport, unsubscribeComments];
 
   if (userId) {
-    unsubscribers.push(onSnapshot(doc(db, REPORTS_COLLECTION, reportId, 'likes', userId), (snapshot) => {
+    unsubscribers.push(subscribeWithRetry((handleError) => onSnapshot(doc(db, REPORTS_COLLECTION, reportId, 'likes', userId), (snapshot) => {
       likedByMe = snapshot.exists();
-      emit();
-    }, onError));
-    unsubscribers.push(onSnapshot(doc(db, REPORTS_COLLECTION, reportId, 'userReports', userId), (snapshot) => {
+      emitIfChanged();
+    }, handleError), onError));
+    unsubscribers.push(subscribeWithRetry((handleError) => onSnapshot(doc(db, REPORTS_COLLECTION, reportId, 'userReports', userId), (snapshot) => {
       reportedByMe = snapshot.exists();
-      emit();
-    }, onError));
+      emitIfChanged();
+    }, handleError), onError));
   }
 
   return () => unsubscribers.forEach((unsubscribe) => unsubscribe());

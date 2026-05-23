@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/components/EmergencyUI';
@@ -29,7 +30,7 @@ function hazardGlyph(hazardType?: string) {
   return '*';
 }
 
-export function ReportCard({ report, onPress }: { report: HazardReport; onPress: (report: HazardReport) => void }) {
+function ReportCardComponent({ report, onPress }: { report: HazardReport; onPress: (report: HazardReport) => void }) {
   const theme = useAppTheme();
   const tone = severityTone(report.severity);
   const toneColor = tone === 'critical' || tone === 'high' ? theme.danger : tone === 'moderate' ? theme.warning : theme.primary;
@@ -84,6 +85,8 @@ export function ReportCard({ report, onPress }: { report: HazardReport; onPress:
     </Pressable>
   );
 }
+
+export const ReportCard = memo(ReportCardComponent);
 
 const styles = StyleSheet.create({
   card: {

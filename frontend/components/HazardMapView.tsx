@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Asset } from 'expo-asset';
 import {
   ActivityIndicator,
@@ -270,7 +270,7 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
 </html>`;
 }
 
-export function HazardMapView({
+function HazardMapViewComponent({
   reports,
   pinSource,
   userLocation,
@@ -392,6 +392,8 @@ export function HazardMapView({
     </View>
   );
 }
+
+export const HazardMapView = memo(HazardMapViewComponent);
 
 const styles = StyleSheet.create({
   container: {

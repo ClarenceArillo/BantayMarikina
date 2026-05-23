@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const express = require('express');
 const axios = require('axios');
+const https = require('https');
 const { admin, db } = require('../firebase');
 
 const router = express.Router();
@@ -8,6 +9,29 @@ const router = express.Router();
 const ALLOWED_FOLDERS = new Set(['reports/images', 'reports/videos', 'profiles']);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 80 * 1024 * 1024;
+const cloudinaryHttp = axios.create({
+  httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 20 }),
+  timeout: 20_000,
+});
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function cloudinaryPost(url, body) {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await cloudinaryHttp.post(url, body);
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      if (![408, 429, 500, 502, 503, 504].includes(status) || attempt === 2) break;
+      await sleep(500 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
 
 function parseCloudinaryUrl() {
   const value = process.env.CLOUDINARY_URL;
@@ -168,7 +192,7 @@ router.post('/cloudinary/delete', requireAuthenticatedUser, async (req, res) => 
     const timestamp = Math.floor(Date.now() / 1000);
     const signature = signParams({ public_id: publicId, timestamp }, apiSecret);
 
-    await axios.post(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/destroy`, new URLSearchParams({
+    await cloudinaryPost(`https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/destroy`, new URLSearchParams({
       api_key: apiKey,
       public_id: publicId,
       signature,

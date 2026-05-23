@@ -1,6 +1,6 @@
 param(
   [int]$BackendPort = 3000,
-  [int]$BackendWaitSeconds = 25,
+  [int]$BackendWaitSeconds = 60,
   [int]$FrontendWebPort = 8082,
   [int]$FrontendWaitSeconds = 45
 )
@@ -26,13 +26,64 @@ $backendProcess = $null
 $frontendWebProcess = $null
 $frontendTunnelProcess = $null
 
-function Test-BackendReady {
-  try {
-    $response = Invoke-WebRequest -Uri "http://127.0.0.1:$BackendPort/" -UseBasicParsing -TimeoutSec 2
-    return $response.StatusCode -ge 200 -and $response.StatusCode -lt 500
-  } catch {
-    return $false
+function Get-PortOwner {
+  param([int]$Port)
+
+  $connection = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+  if (-not $connection) {
+    return $null
   }
+
+  $process = Get-CimInstance Win32_Process -Filter "ProcessId = $($connection.OwningProcess)" -ErrorAction SilentlyContinue
+  return @{
+    ProcessId = $connection.OwningProcess
+    CommandLine = $process.CommandLine
+    Name = $process.Name
+  }
+}
+
+function Test-HttpEndpoint {
+  param([string]$Uri)
+
+  try {
+    return Invoke-WebRequest -Uri $Uri -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+  } catch {
+    return $null
+  }
+}
+
+function Get-BackendReadyState {
+  $health = Test-HttpEndpoint -Uri "http://127.0.0.1:$BackendPort/health"
+  if ($health -and $health.StatusCode -ge 200 -and $health.StatusCode -lt 500) {
+    return 'health'
+  }
+
+  $root = Test-HttpEndpoint -Uri "http://127.0.0.1:$BackendPort/"
+  if ($root -and $root.StatusCode -ge 200 -and $root.StatusCode -lt 500 -and $root.Content -match 'MarikinaSafeWatch API is running') {
+    return 'root-fallback'
+  }
+
+  return $null
+}
+
+function Test-BackendReady {
+  return [bool](Get-BackendReadyState)
+}
+
+function Write-PortOwnerHint {
+  $owner = Get-PortOwner -Port $BackendPort
+  if ($owner) {
+    Write-Host "Port $BackendPort is owned by process $($owner.ProcessId) ($($owner.Name)): $($owner.CommandLine)"
+  }
+}
+
+function Stop-ProcessTree {
+  param([int]$ProcessId)
+
+  Get-CimInstance Win32_Process -Filter "ParentProcessId = $ProcessId" -ErrorAction SilentlyContinue |
+    ForEach-Object { Stop-ProcessTree -ProcessId $_.ProcessId }
+
+  Stop-Process -Id $ProcessId -Force -ErrorAction SilentlyContinue
 }
 
 function Test-FrontendWebReady {
@@ -60,6 +111,9 @@ function Start-LocalhostRunTunnel {
     -ArgumentList @(
       '-o', 'StrictHostKeyChecking=no',
       '-o', 'UserKnownHostsFile=NUL',
+      '-o', 'ExitOnForwardFailure=yes',
+      '-o', 'ServerAliveInterval=30',
+      '-o', 'ServerAliveCountMax=3',
       '-R', "80:127.0.0.1:$Port",
       'nokey@localhost.run'
     ) `
@@ -165,10 +219,11 @@ function Start-FrontendWebFallback {
 }
 
 if (-not (Test-BackendReady)) {
+  Write-PortOwnerHint
   Remove-Item $backendOutLog, $backendErrLog -Force -ErrorAction SilentlyContinue
 
-  $backendProcess = Start-Process -FilePath 'npm.cmd' `
-    -ArgumentList @('run', 'start') `
+  $backendProcess = Start-Process -FilePath 'node.exe' `
+    -ArgumentList @('--use-system-ca', 'index.js') `
     -WorkingDirectory $backendRoot `
     -RedirectStandardOutput $backendOutLog `
     -RedirectStandardError $backendErrLog `
@@ -180,10 +235,12 @@ if (-not (Test-BackendReady)) {
   $startedBackend = $true
 
   $ready = $false
+  $readyState = $null
   for ($attempt = 0; $attempt -lt $BackendWaitSeconds; $attempt++) {
     Start-Sleep -Seconds 1
 
-    if (Test-BackendReady) {
+    $readyState = Get-BackendReadyState
+    if ($readyState) {
       $ready = $true
       break
     }
@@ -194,10 +251,14 @@ if (-not (Test-BackendReady)) {
   }
 
   if (-not $ready) {
+    Write-PortOwnerHint
     throw "Timed out waiting for backend on http://127.0.0.1:$BackendPort. Check $backendOutLog and $backendErrLog."
   }
+
+  Write-Host "Backend is ready via $readyState endpoint on http://127.0.0.1:$BackendPort."
 } else {
-  Write-Host "Backend is already running on http://127.0.0.1:$BackendPort."
+  $readyState = Get-BackendReadyState
+  Write-Host "Backend is already running on http://127.0.0.1:$BackendPort via $readyState endpoint."
 }
 
 Push-Location $backendRoot
@@ -242,22 +303,22 @@ try {
   if (Test-Path $frontendTunnelPidPath) {
     $frontendTunnelPid = Get-Content $frontendTunnelPidPath -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($frontendTunnelPid) {
-      Stop-Process -Id ([int]$frontendTunnelPid) -Force -ErrorAction SilentlyContinue
+      Stop-ProcessTree -ProcessId ([int]$frontendTunnelPid)
     }
   }
 
   if ($frontendWebProcess -and -not $frontendWebProcess.HasExited) {
-    Stop-Process -Id $frontendWebProcess.Id -Force -ErrorAction SilentlyContinue
+    Stop-ProcessTree -ProcessId $frontendWebProcess.Id
   }
 
   if (Test-Path $tunnelPidPath) {
     $tunnelPid = Get-Content $tunnelPidPath -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($tunnelPid) {
-      Stop-Process -Id ([int]$tunnelPid) -Force -ErrorAction SilentlyContinue
+      Stop-ProcessTree -ProcessId ([int]$tunnelPid)
     }
   }
 
   if ($startedBackend -and $backendProcess -and -not $backendProcess.HasExited) {
-    Stop-Process -Id $backendProcess.Id -Force -ErrorAction SilentlyContinue
+    Stop-ProcessTree -ProcessId $backendProcess.Id
   }
 }

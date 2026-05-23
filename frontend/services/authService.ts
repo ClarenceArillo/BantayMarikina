@@ -22,6 +22,8 @@ function getLocalBaseUrl() {
 const configuredApiUrl = process.env.EXPO_PUBLIC_API_URL?.trim();
 
 export const API_BASE_URL = configuredApiUrl || getLocalBaseUrl();
+const REQUEST_TIMEOUT_MS = 15_000;
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
 
 export type RegisterPayload = {
   first_name: string;
@@ -130,19 +132,49 @@ export type ChangePasswordPayload = {
   confirm_password: string;
 };
 
-async function request<T>(path: string, options: RequestInit): Promise<T> {
-  let response: Response;
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, {
+    return await fetch(url, {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      ...options,
+      signal: controller.signal,
     });
-  } catch {
-    throw new Error(`Cannot reach backend at ${API_BASE_URL}. Check that the backend server is running and your phone is on the same network.`);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function request<T>(path: string, options: RequestInit): Promise<T> {
+  let response: Response | null = null;
+  let lastNetworkError: unknown;
+  const url = `${API_BASE_URL}${path}`;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      response = await fetchWithTimeout(url, options);
+      if (!RETRYABLE_STATUS.has(response.status) || attempt === 2) break;
+    } catch (error) {
+      lastNetworkError = error;
+      if (attempt === 2) {
+        throw new Error(`Cannot reach backend at ${API_BASE_URL}. Check that the backend server is running and your phone is on the same network.`);
+      }
+    }
+
+    await sleep(500 * (attempt + 1));
+  }
+
+  if (!response) {
+    throw lastNetworkError instanceof Error ? lastNetworkError : new Error('Request failed.');
   }
 
   const data = await response.json().catch(() => ({}));

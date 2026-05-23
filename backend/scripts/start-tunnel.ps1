@@ -21,6 +21,9 @@ $process = Start-Process -FilePath 'ssh.exe' `
   -ArgumentList @(
     '-o', 'StrictHostKeyChecking=no',
     '-o', 'UserKnownHostsFile=NUL',
+    '-o', 'ExitOnForwardFailure=yes',
+    '-o', 'ServerAliveInterval=30',
+    '-o', 'ServerAliveCountMax=3',
     '-R', '80:127.0.0.1:3000',
     'nokey@localhost.run'
   ) `

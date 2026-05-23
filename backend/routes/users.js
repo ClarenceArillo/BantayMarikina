@@ -2,6 +2,34 @@ const express = require('express');
 const router = express.Router();
 const { db, admin } = require('../firebase');
 const axios = require('axios');
+const https = require('https');
+
+const firebaseAuthHttp = axios.create({
+  httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 20 }),
+  timeout: 15_000,
+});
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function postFirebaseAuth(url, body) {
+  let lastError;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await firebaseAuthHttp.post(url, body);
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      if (!RETRYABLE_STATUS.has(status) || attempt === 2) break;
+      await sleep(500 * (attempt + 1));
+    }
+  }
+
+  throw lastError;
+}
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
@@ -315,7 +343,7 @@ router.patch('/me/password', requireAuthenticatedUser, async (req, res) => {
       return res.status(400).json({ error: 'Use at least 8 characters with uppercase, lowercase, and a number.' });
     }
 
-    await axios.post(
+    await postFirebaseAuth(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
       {
         email: user.email,
@@ -452,7 +480,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email or username and password are required' });
     }
 
-    const authResponse = await axios.post(
+    const authResponse = await postFirebaseAuth(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
       {
         email: cleanEmail,
@@ -534,7 +562,7 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    await axios.post(
+    await postFirebaseAuth(
       `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${firebaseApiKey}`,
       {
         requestType: 'PASSWORD_RESET',
@@ -546,15 +574,6 @@ router.post('/forgot-password', async (req, res) => {
   } catch (error) {
     const status = error.response?.status === 400 ? 404 : 500;
     res.status(status).json({ error: getAuthErrorMessage(error) });
-  }
-});
-
-router.post('/firebase-token', requireAuthenticatedUser, async (req, res) => {
-  try {
-    const customToken = await admin.auth().createCustomToken(req.auth.uid);
-    res.json({ customToken });
-  } catch (error) {
-    res.status(500).json({ error: 'Unable to create Firebase session token' });
   }
 });
 

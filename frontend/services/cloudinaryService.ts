@@ -33,20 +33,57 @@ type UploadOptions = {
   folder: CloudinaryFolder;
   idToken: string;
   mediaUri: string;
+  mediaSizeBytes?: number;
   mimeType?: string;
   onProgress?: (progress: number) => void;
   resourceType?: CloudinaryResourceType;
 };
 
+const REQUEST_TIMEOUT_MS = 15_000;
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function requestWithAuth<T>(path: string, idToken: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  let response: Response | null = null;
+  const requestOptions = {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${idToken}`,
       ...options.headers,
     },
-  });
+  };
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      response = await fetchWithTimeout(`${API_BASE_URL}${path}`, requestOptions);
+      if (!RETRYABLE_STATUS.has(response.status) || attempt === 2) break;
+    } catch (error) {
+      if (attempt === 2) throw error;
+    }
+
+    await sleep(500 * (attempt + 1));
+  }
+
+  if (!response) throw new Error('Request failed.');
+
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -81,6 +118,7 @@ function xhrUpload(uploadUrl: string, formData: FormData, onProgress?: (progress
   return new Promise<CloudinaryMedia>((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', uploadUrl);
+    xhr.timeout = 120_000;
     xhr.onload = () => {
       const data = JSON.parse(xhr.responseText || '{}');
       if (xhr.status >= 200 && xhr.status < 300) {
@@ -100,6 +138,7 @@ function xhrUpload(uploadUrl: string, formData: FormData, onProgress?: (progress
       reject(new Error(data.error?.message || `Upload failed (${xhr.status})`));
     };
     xhr.onerror = () => reject(new Error('Upload connection failed. Please try again.'));
+    xhr.ontimeout = () => reject(new Error('Upload timed out. Please try again on a stable connection.'));
     xhr.upload.onprogress = (event) => {
       if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
     };
@@ -122,11 +161,14 @@ export async function uploadToCloudinary({
   folder,
   idToken,
   mediaUri,
+  mediaSizeBytes,
   mimeType,
   onProgress,
   resourceType = 'image',
 }: UploadOptions) {
-  const bytes = await getLocalAssetSize(mediaUri);
+  const bytes = mediaSizeBytes && Number.isFinite(mediaSizeBytes) && mediaSizeBytes > 0
+    ? mediaSizeBytes
+    : await getLocalAssetSize(mediaUri);
   const signature = await requestWithAuth<SignUploadResponse>('/media/cloudinary/sign-upload', idToken, {
     method: 'POST',
     body: JSON.stringify({ bytes, folder, resourceType }),

@@ -39,6 +39,7 @@ export default function ReportScreen() {
   const [severity, setSeverity] = useState<HazardSeverity>('Moderate');
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [mediaSizeBytes, setMediaSizeBytes] = useState<number | undefined>();
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -76,8 +77,10 @@ export default function ReportScreen() {
     });
 
     if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-      setMediaType(result.assets[0].type === 'video' ? 'video' : 'image');
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      setMediaSizeBytes(asset.fileSize);
+      setMediaType(asset.type === 'video' ? 'video' : 'image');
     }
   }
 
@@ -100,6 +103,7 @@ export default function ReportScreen() {
         reporterName: session?.full_name,
         reporterPhotoUrl: session?.profile?.profilePhotoUrl || session?.profile?.profile_photo_url || session?.profile?.photoURL,
         imageUri: imageUri || undefined,
+        mediaSizeBytes,
         mediaType,
         onUploadProgress: setUploadProgress,
       });

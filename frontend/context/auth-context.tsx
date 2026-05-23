@@ -39,19 +39,17 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         }
       });
 
+    let unsubscribeProfile: (() => void) | undefined;
     ensureFirebaseSession(session.idToken)
       .then(() => getUserProfilePhotoUrl(session.uid))
       .then((uri) => {
-        if (!isActive || !uri) return;
+        if (!isActive) return;
 
-        setProfilePhotoUriState(uri);
-        AsyncStorage.setItem(`bantay.profile.photo.${session.uid}`, uri).catch(() => undefined);
-      })
-      .catch(() => undefined);
+        if (uri) {
+          setProfilePhotoUriState(uri);
+          AsyncStorage.setItem(`bantay.profile.photo.${session.uid}`, uri).catch(() => undefined);
+        }
 
-    let unsubscribeProfile: (() => void) | undefined;
-    ensureFirebaseSession(session.idToken)
-      .then(() => {
         if (!isActive) return;
         unsubscribeProfile = subscribeToUserProfilePhoto(session.uid, (uri) => {
           if (!isActive) return;

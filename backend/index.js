@@ -12,8 +12,46 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
+function log(level, message, meta = {}) {
+  const payload = {
+    level,
+    message,
+    service: 'bantay-marikina-backend',
+    timestamp: new Date().toISOString(),
+    ...meta,
+  };
+  const line = JSON.stringify(payload);
+  if (level === 'error') {
+    console.error(line);
+  } else if (level === 'warn') {
+    console.warn(line);
+  } else {
+    console.log(line);
+  }
+}
+
+process.on('unhandledRejection', (reason) => {
+  log('error', 'Unhandled promise rejection', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  log('error', 'Uncaught exception', {
+    error: error.message,
+    stack: error.stack,
+  });
+});
+
 app.use(cors());
-app.use(express.json());
+app.disable('x-powered-by');
+app.use(express.json({ limit: '1mb' }));
+app.use((req, res, next) => {
+  req.setTimeout(30_000);
+  res.setTimeout(35_000);
+  next();
+});
 
 // Routes
 const reportsRouter = require('./routes/reports');
@@ -26,24 +64,43 @@ app.get('/', (req, res) => {
   res.json({ message: 'MarikinaSafeWatch API is running!' });
 });
 
+app.get('/health', (req, res) => {
+  res.json({ ok: true, uptime: process.uptime() });
+});
+
 app.use('/api/reports', reportsRouter);
 app.use('/api/users', usersRouter);
 app.use('/api/media', mediaRouter);
 app.use('/api/weather', weatherRouter);
 app.use('/api/waterlevel', waterLevelRouter);
 
-app.listen(PORT, HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
+const server = app.listen(PORT, HOST, () => {
+  log('info', 'Backend listener ready', { host: HOST, port: Number(PORT) });
+});
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+server.on('error', (error) => {
+  log('error', 'Backend listener failed', {
+    code: error.code,
+    error: error.message,
+    host: HOST,
+    port: Number(PORT),
+  });
+  process.exitCode = 1;
 });
 
-warmDashboardCache();
+warmDashboardCache().catch((error) => {
+  log('warn', 'Dashboard cache warmup failed after listener startup', {
+    error: error.message,
+  });
+});
 cron.schedule('*/10 * * * *', () => {
   refreshWeather().catch((error) => {
-    console.error('Failed to refresh weather cache:', error.message);
+    log('warn', 'Failed to refresh weather cache', { error: error.message });
   });
 });
 cron.schedule('*/5 * * * *', () => {
   refreshWaterLevels().catch((error) => {
-    console.error('Failed to refresh water level cache:', error.message);
+    log('warn', 'Failed to refresh water level cache', { error: error.message });
   });
 });

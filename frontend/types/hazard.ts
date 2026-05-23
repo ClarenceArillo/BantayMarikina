@@ -63,6 +63,7 @@ export type HazardReportInput = {
   reporterName?: string;
   reporterPhotoUrl?: string;
   imageUri?: string;
+  mediaSizeBytes?: number;
   mediaType?: 'image' | 'video';
   onUploadProgress?: (progress: number) => void;
 };

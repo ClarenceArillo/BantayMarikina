@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/components/EmergencyUI';
@@ -8,7 +9,7 @@ function formatTime(date: Date | null) {
   return date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-export function NotificationCard({
+function NotificationCardComponent({
   expanded,
   notification,
   onToggle,
@@ -68,6 +69,8 @@ export function NotificationCard({
     </Pressable>
   );
 }
+
+export const NotificationCard = memo(NotificationCardComponent);
 
 const styles = StyleSheet.create({
   card: {

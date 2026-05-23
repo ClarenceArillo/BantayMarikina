@@ -8,12 +8,8 @@ admin.initializeApp();
 const db = admin.firestore();
 const messaging = admin.messaging();
 
-function chunk(items, size) {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function categoryLabel(category) {
@@ -67,13 +63,33 @@ async function destroyCloudinaryAsset(media) {
   });
 
   const resourceType = media.resource_type === 'video' ? 'video' : 'image';
-  const response = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/${resourceType}/destroy`, {
-    method: 'POST',
-    body,
-  });
+  let response = null;
+  let lastError = null;
 
-  if (!response.ok) {
-    logger.warn('Unable to destroy Cloudinary asset', { publicId: media.public_id, status: response.status });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+
+    try {
+      response = await fetch(`https://api.cloudinary.com/v1_1/${config.cloudName}/${resourceType}/destroy`, {
+        method: 'POST',
+        body,
+        signal: controller.signal,
+      });
+      if (![408, 429, 500, 502, 503, 504].includes(response.status) || attempt === 2) break;
+    } catch (error) {
+      lastError = error;
+      if (attempt === 2) throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    await sleep(500 * (attempt + 1));
+  }
+
+  if (!response?.ok) {
+    logger.warn('Unable to destroy Cloudinary asset', { publicId: media.public_id, status: response?.status || null });
+    if (lastError) logger.warn('Cloudinary destroy error', lastError);
   }
 }
 
@@ -109,32 +125,21 @@ exports.onReportCreated = onDocumentCreated('Reports/{reportId}', async (event) 
     logger.warn('Unable to send community report FCM topic message', error);
   });
 
-  const users = await db.collection('Users').select().get();
-  const writes = users.docs.map((userDoc) => ({
-    ref: db.collection('Notifications').doc(),
-    data: {
-      audience: 'user',
-      recipientId: userDoc.id,
-      type: 'new_report',
-      reportId,
-      title,
-      body,
-      hazardType: report.hazardType || report.hazard_type || 'Hazard',
-      severity: report.severity || 'Moderate',
-      imageUrl: report.imageUrl || report.image_url || null,
-      latitude: report.latitude || null,
-      longitude: report.longitude || null,
-      barangay: report.barangay || '',
-      reporterName: report.reporterName || 'Resident',
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    },
-  }));
-
-  for (const group of chunk(writes, 450)) {
-    const batch = db.batch();
-    group.forEach((write) => batch.set(write.ref, write.data));
-    await batch.commit();
-  }
+  await db.collection('Notifications').doc(`report_${reportId}`).set({
+    audience: 'all',
+    type: 'new_report',
+    reportId,
+    title,
+    body,
+    hazardType: report.hazardType || report.hazard_type || 'Hazard',
+    severity: report.severity || 'Moderate',
+    imageUrl: report.imageUrl || report.image_url || null,
+    latitude: report.latitude || null,
+    longitude: report.longitude || null,
+    barangay: report.barangay || '',
+    reporterName: report.reporterName || 'Resident',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
 });
 
 exports.onReportRemoved = onDocumentUpdated('Reports/{reportId}', async (event) => {

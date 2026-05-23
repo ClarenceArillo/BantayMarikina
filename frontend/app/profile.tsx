@@ -176,7 +176,8 @@ export default function ProfileScreen() {
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
-      const localUri = result.assets[0].uri;
+      const asset = result.assets[0];
+      const localUri = asset.uri;
       setProfilePhotoUri(localUri);
 
       if (!idToken || !session?.uid) {
@@ -187,7 +188,7 @@ export default function ProfileScreen() {
       try {
         setIsUploadingPhoto(true);
         await ensureFirebaseSession(idToken);
-        const remoteUri = await uploadUserProfilePhoto(session.uid, idToken, localUri, setUploadProgress);
+        const remoteUri = await uploadUserProfilePhoto(session.uid, idToken, localUri, asset.fileSize, setUploadProgress);
         setProfilePhotoUri(remoteUri);
       } catch (uploadError) {
         Alert.alert('Photo not saved', uploadError instanceof Error ? uploadError.message : 'Please try again.');
