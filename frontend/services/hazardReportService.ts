@@ -158,6 +158,11 @@ function normalizeNotification(
     body: data.body || '',
     hazardType: data.hazardType,
     severity: data.severity,
+    source: data.source || (data.type === 'official_alert' ? 'official' : 'community'),
+    sourceLabel: data.sourceLabel || data.source_label || (data.type === 'official_alert' ? 'OFFICIAL ALERT' : undefined),
+    safetyTip: data.safetyTip || data.safety_tip,
+    affectedArea: data.affectedArea || data.affected_area || data.barangay,
+    priority: data.priority || (data.type === 'official_alert' ? 'high' : 'normal'),
     imageUrl: data.imageUrl,
     capturedAtLabel: data.capturedAtLabel || data.captured_at_label || report?.capturedAtLabel,
     latitude: data.latitude,
@@ -219,6 +224,26 @@ function matchesFilters(report: HazardReport, filters?: ReportFilters) {
   if (filters?.severity && filters.severity !== 'All' && report.severity !== filters.severity) return false;
   if (filters?.status && filters.status !== 'All' && report.status !== filters.status) return false;
   if (filters?.source && filters.source !== 'All' && report.source !== filters.source) return false;
+
+  return true;
+}
+
+function matchesNotificationFilters(notification: ReportNotification, filters?: ReportFilters) {
+  if (!filters) return true;
+
+  const window = getDateWindow(filters);
+  const createdAt = notification.createdAt?.getTime();
+
+  if (window.start && createdAt && createdAt < window.start.getTime()) return false;
+  if (window.end && createdAt && createdAt > window.end.getTime()) return false;
+
+  if (filters.source && filters.source !== 'All') {
+    const source = notification.source === 'admin' ? 'official' : notification.source || notification.report?.source || 'community';
+    if (source !== filters.source) return false;
+  }
+
+  if (filters.hazardType && filters.hazardType !== 'All' && notification.hazardType !== filters.hazardType && notification.report?.hazardType !== filters.hazardType) return false;
+  if (filters.severity && filters.severity !== 'All' && notification.severity !== filters.severity && notification.report?.severity !== filters.severity) return false;
 
   return true;
 }
@@ -424,11 +449,11 @@ export function subscribeToNotifications(
         if (notification.type === 'moderation_removed') return true;
         if (notification.report?.moderationStatus === 'removed' || notification.report?.status === 'rejected') return false;
         if (filters && notification.report) return matchesFilters(notification.report, filters);
-        return true;
+        return matchesNotificationFilters(notification, filters);
       })
       .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
 
-    const nextHash = notifications.map((notification) => `${notification.id}:${notification.read}:${notification.report?.id || ''}:${notification.report?.status || ''}:${notification.report?.moderationStatus || ''}`).join('|');
+    const nextHash = notifications.map((notification) => `${notification.id}:${notification.read}:${notification.source}:${notification.priority}:${notification.report?.id || ''}:${notification.report?.status || ''}:${notification.report?.moderationStatus || ''}`).join('|');
     if (nextHash === lastHash) return;
     lastHash = nextHash;
     onNotifications(notifications);

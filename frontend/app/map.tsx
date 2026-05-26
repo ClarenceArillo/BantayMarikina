@@ -108,6 +108,7 @@ export default function MapScreen() {
           reports={reports}
           evacuationSites={evacuationSites}
           pinSource={iconSources.pin}
+          evacuationSource={iconSources.evacuation}
           userLocation={userLocation}
           isLoading={isLoading}
           error={error || locationError || (isEvacuationVisible ? evacuationSitesError : null)}

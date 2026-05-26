@@ -66,7 +66,7 @@ export const ReportFilterBar = memo(function ReportFilterBar({ filters, onChange
         </View>
 
         <View style={styles.sectionBlock}>
-          <Text style={[styles.sectionTitle, { color: theme.muted }]}>SEVERITY</Text>
+          <Text style={[styles.sectionTitle, { color: theme.muted }]}>SEVERITY & SOURCE</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
             <FilterChip active={!filters.severity || filters.severity === 'All'} label="All Severity" onPress={() => onChange({ ...filters, severity: 'All' })} />
             {SEVERITY_LEVELS.map((level) => (
@@ -74,8 +74,8 @@ export const ReportFilterBar = memo(function ReportFilterBar({ filters, onChange
             ))}
             <FilterChip active={filters.status === 'active'} label="Unresolved" onPress={() => onChange({ ...filters, status: 'active' })} />
             <FilterChip active={filters.status === 'resolved'} label="Resolved" onPress={() => onChange({ ...filters, status: 'resolved' })} />
-            <FilterChip active={filters.source === 'community'} label="Community" onPress={() => onChange({ ...filters, source: 'community' })} />
-            <FilterChip active={filters.source === 'official'} label="Official" onPress={() => onChange({ ...filters, source: 'official' })} />
+            <FilterChip active={filters.source === 'community'} label="Community Reports" onPress={() => onChange({ ...filters, source: 'community' })} />
+            <FilterChip active={filters.source === 'official'} label="Official Alerts" onPress={() => onChange({ ...filters, source: 'official' })} />
             <Pressable style={[styles.resetButton, { borderColor: theme.border }]} onPress={resetFilters}>
               <Text style={[styles.resetText, { color: theme.primary }]}>Reset</Text>
             </Pressable>

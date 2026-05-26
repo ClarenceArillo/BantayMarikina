@@ -7,6 +7,7 @@ const {
   refreshWeather,
   warmDashboardCache,
 } = require('./services/dashboardCache');
+const { startOfficialAlertPolling, stopOfficialAlertPolling } = require('./services/officialAlertPoller');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -59,6 +60,7 @@ const usersRouter = require('./routes/users');
 const mediaRouter = require('./routes/media');
 const weatherRouter = require('./routes/weather');
 const waterLevelRouter = require('./routes/waterlevel');
+const alertsRouter = require('./routes/alerts');
 
 app.get('/', (req, res) => {
   res.json({ message: 'MarikinaSafeWatch API is running!' });
@@ -73,6 +75,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/media', mediaRouter);
 app.use('/api/weather', weatherRouter);
 app.use('/api/waterlevel', waterLevelRouter);
+app.use('/api/alerts', alertsRouter);
 
 const server = app.listen(PORT, HOST, () => {
   log('info', 'Backend listener ready', { host: HOST, port: Number(PORT) });
@@ -94,6 +97,7 @@ warmDashboardCache().catch((error) => {
     error: error.message,
   });
 });
+startOfficialAlertPolling();
 cron.schedule('*/10 * * * *', () => {
   refreshWeather().catch((error) => {
     log('warn', 'Failed to refresh weather cache', { error: error.message });
@@ -103,4 +107,14 @@ cron.schedule('*/5 * * * *', () => {
   refreshWaterLevels().catch((error) => {
     log('warn', 'Failed to refresh water level cache', { error: error.message });
   });
+});
+
+process.on('SIGTERM', () => {
+  stopOfficialAlertPolling();
+  server.close(() => process.exit(0));
+});
+
+process.on('SIGINT', () => {
+  stopOfficialAlertPolling();
+  server.close(() => process.exit(0));
 });

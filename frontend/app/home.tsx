@@ -17,6 +17,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { AppIcon, Badge, EmergencyCard, PressScale, RiskBanner, SectionHeader, SoftCard, ThemeToggle, useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
+import { SafetyTipsModal } from '@/components/SafetyTipsModal';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuthSession } from '@/context/auth-context';
 import { useHazardReports } from '@/hooks/useHazardReports';
@@ -156,6 +157,7 @@ export default function HomeDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
+  const [isSafetyTipsVisible, setIsSafetyTipsVisible] = useState(false);
   const { reports: hazardReports, isLoading: isMapLoading, error: mapError } = useHazardReports(session?.idToken, 150);
 
   const displayName = useMemo(() => getFirstName(fullName), [fullName]);
@@ -226,7 +228,7 @@ export default function HomeDashboard() {
         <View style={styles.quickActions}>
           <QuickAction icon={iconSources.evacuation} label="Evacuation" tone="red" onPress={openEvacuationMap} />
           <QuickAction icon={iconSources.hotline} label="Hotlines" tone="orange" onPress={openHotlines} />
-          <QuickAction icon={iconSources.safetyTips} label="Safety Tips" tone="yellow" />
+          <QuickAction icon={iconSources.safetyTips} label="Safety Tips" tone="yellow" onPress={() => setIsSafetyTipsVisible(true)} />
         </View>
 
         {error ? (
@@ -338,6 +340,7 @@ export default function HomeDashboard() {
       </ScrollView>
 
       <HazardDetailsSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
+      <SafetyTipsModal visible={isSafetyTipsVisible} onClose={() => setIsSafetyTipsVisible(false)} />
     </SafeAreaView>
   );
 }

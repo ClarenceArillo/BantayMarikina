@@ -52,6 +52,7 @@ export default function NotificationScreen() {
   const { notifications, isLoading, error } = useNotifications(session?.uid, session?.idToken, filters);
   const groups = useMemo(() => groupNotifications(notifications), [notifications]);
   const unreadCount = notifications.filter((notification) => !notification.read).length;
+  const officialCount = notifications.filter((notification) => notification.source === 'official' || notification.type === 'official_alert').length;
   const listItems = useMemo(() => groups.flatMap((group) => [
     { id: `header-${group.title}`, title: group.title, type: 'header' as const },
     ...group.items.map((notification) => ({ id: notification.id, notification, type: 'notification' as const })),
@@ -102,7 +103,7 @@ export default function NotificationScreen() {
           <View style={styles.listHeader}>
             <View style={styles.header}>
               <Text style={[styles.title, { color: theme.text }]}>Notifications</Text>
-              <Text style={[styles.subtitle, { color: theme.muted }]}>{unreadCount} unread community alerts</Text>
+              <Text style={[styles.subtitle, { color: theme.muted }]}>{unreadCount} unread alerts | {officialCount} official</Text>
             </View>
             <ReportFilterBar filters={filters} onChange={setFilters} />
             {isLoading ? <ActivityIndicator color={theme.primary} style={styles.loader} /> : null}
@@ -110,7 +111,7 @@ export default function NotificationScreen() {
             {!isLoading && groups.length === 0 ? (
               <View style={[styles.emptyState, { backgroundColor: theme.surface, borderColor: theme.borderSoft }]}>
                 <Text style={[styles.emptyTitle, { color: theme.text }]}>No alerts yet</Text>
-                <Text style={[styles.emptyBody, { color: theme.muted }]}>New community hazard reports will appear here in real time.</Text>
+                <Text style={[styles.emptyBody, { color: theme.muted }]}>New community reports and official hazard alerts will appear here in real time.</Text>
               </View>
             ) : null}
           </View>

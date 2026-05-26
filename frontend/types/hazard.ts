@@ -88,11 +88,16 @@ export type ReportNotification = {
   reportId?: string;
   recipientId?: string | null;
   audience?: 'all' | 'user';
-  type: 'new_report' | 'moderation_removed';
+  type: 'new_report' | 'moderation_removed' | 'official_alert';
   title: string;
   body: string;
   hazardType?: string;
   severity?: string;
+  source?: 'official' | 'community' | 'admin';
+  sourceLabel?: string;
+  safetyTip?: string;
+  affectedArea?: string;
+  priority?: 'normal' | 'high' | 'critical';
   imageUrl?: string;
   capturedAtLabel?: string;
   latitude?: number;
