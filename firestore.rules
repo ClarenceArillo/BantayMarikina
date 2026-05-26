@@ -145,6 +145,11 @@ service cloud.firestore {
       }
     }
 
+    match /EvacuationSites/{siteId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     match /Users/{userId} {
       allow read: if signedIn() && request.auth.uid == userId;
       allow update: if signedIn()

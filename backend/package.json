@@ -20,6 +20,7 @@
   "scripts": {
     "start": "node --use-system-ca index.js",
     "dev": "nodemon --exec \"node --use-system-ca\" index.js",
+    "seed:evacuation-sites": "node --use-system-ca scripts/seed-evacuation-sites.js",
     "seed:test-reports": "node --use-system-ca scripts/seed-test-hazard-reports.js seed",
     "cleanup:test-reports": "node --use-system-ca scripts/seed-test-hazard-reports.js cleanup",
     "tunnel": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-tunnel.ps1"

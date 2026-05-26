@@ -12,6 +12,7 @@ import {
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { useTheme } from '@/theme/useTheme';
+import type { EvacuationSite } from '@/types/evacuation';
 import type { HazardReport } from '@/types/hazard';
 
 const MARIKINA_CENTER = { latitude: 14.6507, longitude: 121.1029 };
@@ -26,6 +27,7 @@ type UserLocation = {
 type HazardMapViewProps = {
   reports: HazardReport[];
   pinSource: ImageSourcePropType;
+  evacuationSites?: EvacuationSite[];
   userLocation?: UserLocation | null;
   isLoading?: boolean;
   error?: string | null;
@@ -123,6 +125,42 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
       top: 8px;
       width: 12px;
     }
+    .evacuation-pin-wrap {
+      align-items: center;
+      background: #c93535;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 10px 20px rgba(201,53,53,.34);
+      display: flex;
+      height: 38px;
+      justify-content: center;
+      width: 38px;
+    }
+    .evacuation-pin-wrap img {
+      filter: brightness(0) invert(1);
+      height: 24px;
+      object-fit: contain;
+      width: 24px;
+    }
+    .evacuation-label {
+      background: #fff;
+      border: 1px solid rgba(201,53,53,.26);
+      border-radius: 999px;
+      box-shadow: 0 8px 18px rgba(17,24,39,.16);
+      color: #a6192e;
+      font-size: 11px;
+      font-weight: 900;
+      padding: 5px 9px;
+    }
+    .leaflet-tooltip-left.evacuation-label::before,
+    .leaflet-tooltip-right.evacuation-label::before,
+    .leaflet-tooltip-top.evacuation-label::before,
+    .leaflet-tooltip-bottom.evacuation-label::before {
+      display: none;
+    }
+    .evacuation-preview { min-width: 180px; }
+    .evacuation-preview-title { color: #a6192e; font-size: 13px; font-weight: 900; margin-bottom: 4px; }
+    .evacuation-preview-meta { font-size: 11px; font-weight: 800; opacity: .74; }
     .user-dot {
       background: #2d75b4;
       border: 3px solid #fff;
@@ -142,6 +180,7 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
     const marikina = [${MARIKINA_CENTER.latitude}, ${MARIKINA_CENTER.longitude}];
     const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView(marikina, ${initialZoom});
     const cluster = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: ${compact ? 42 : 54} });
+    const evacuationLayer = L.layerGroup();
     const pinUri = ${serializeForScript(pinUri)};
     let markersById = {};
     let userMarker = null;
@@ -152,6 +191,7 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
     map.addLayer(cluster);
+    map.addLayer(evacuationLayer);
 
     function post(payload) {
       window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(payload));
@@ -193,6 +233,23 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
       '</div>';
     }
 
+    function evacuationIcon() {
+      return L.divIcon({
+        className: 'evacuation-pin-host',
+        html: '<div class="evacuation-pin-wrap"><img src="' + escapeHtml(pinUri) + '" onerror="this.style.display=\\'none\\';this.parentNode.textContent=\\'!\\';"></div>',
+        iconSize: [38, 38],
+        iconAnchor: [19, 36],
+        popupAnchor: [0, -34]
+      });
+    }
+
+    function evacuationPopupHtml(site) {
+      return '<div class="evacuation-preview">' +
+        '<div class="evacuation-preview-title">' + escapeHtml(site.name || 'Evacuation site') + '</div>' +
+        '<div class="evacuation-preview-meta">Evacuation center preview</div>' +
+      '</div>';
+    }
+
     function updateReports(reports) {
       cluster.clearLayers();
       markersById = {};
@@ -208,6 +265,26 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
         });
         markersById[report.id] = marker;
         cluster.addLayer(marker);
+      });
+    }
+
+    function updateEvacuations(sites) {
+      evacuationLayer.clearLayers();
+      (sites || []).forEach((site) => {
+        if (!isValidPoint(site)) return;
+        const marker = L.marker([site.latitude, site.longitude], {
+          icon: evacuationIcon(),
+          title: site.name,
+          zIndexOffset: 700
+        });
+        marker.bindTooltip(site.name || 'Evacuation site', {
+          className: 'evacuation-label',
+          direction: 'right',
+          offset: [18, -24],
+          permanent: true
+        });
+        marker.bindPopup(evacuationPopupHtml(site), { closeButton: false, maxWidth: 240 });
+        evacuationLayer.addLayer(marker);
       });
     }
 
@@ -258,6 +335,7 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
 
     window.updateHazardMap = function(payload) {
       if (Object.prototype.hasOwnProperty.call(payload, 'reports')) updateReports(payload.reports || []);
+      if (Object.prototype.hasOwnProperty.call(payload, 'evacuationSites')) updateEvacuations(payload.evacuationSites || []);
       if (Object.prototype.hasOwnProperty.call(payload, 'userLocation')) updateUserLocation(payload.userLocation);
       if (payload.focusUser) focusUser(payload.userLocation);
     };
@@ -273,6 +351,7 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
 function HazardMapViewComponent({
   reports,
   pinSource,
+  evacuationSites = [],
   userLocation,
   isLoading = false,
   error,
@@ -316,6 +395,19 @@ function HazardMapViewComponent({
     [reports]
   );
 
+  const mapEvacuationSites = useMemo(
+    () =>
+      evacuationSites
+        .filter((site) => isValidLocation(site))
+        .map((site) => ({
+          id: site.id,
+          name: site.name,
+          latitude: site.latitude,
+          longitude: site.longitude,
+        })),
+    [evacuationSites]
+  );
+
   const safeUserLocation = useMemo(() => (isValidLocation(userLocation) ? userLocation : null), [userLocation]);
 
   const injectMapUpdate = useCallback((payload: object) => {
@@ -334,10 +426,11 @@ function HazardMapViewComponent({
 
     injectMapUpdate({
       reports: mapReports,
+      evacuationSites: mapEvacuationSites,
       userLocation: safeUserLocation,
       focusUser: shouldFocusUser,
     });
-  }, [focusSignal, injectMapUpdate, mapReports, safeUserLocation]);
+  }, [focusSignal, injectMapUpdate, mapEvacuationSites, mapReports, safeUserLocation]);
 
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     try {
@@ -348,6 +441,7 @@ function HazardMapViewComponent({
         injectMapUpdate(
           pendingPayloadRef.current ?? {
             reports: mapReports,
+            evacuationSites: mapEvacuationSites,
             userLocation: safeUserLocation,
           }
         );
@@ -364,7 +458,7 @@ function HazardMapViewComponent({
     } catch {
       return;
     }
-  }, [injectMapUpdate, mapReports, onMapPress, onMarkerPress, safeUserLocation]);
+  }, [injectMapUpdate, mapEvacuationSites, mapReports, onMapPress, onMarkerPress, safeUserLocation]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.mapBackground, height }]}>

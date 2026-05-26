@@ -160,6 +160,7 @@ export default function HomeDashboard() {
 
   const displayName = useMemo(() => getFirstName(fullName), [fullName]);
   const openMap = useCallback(() => router.push('/map' as never), []);
+  const openEvacuationMap = useCallback(() => router.push({ pathname: '/map', params: { evacuation: '1' } } as never), []);
   const openHotlines = useCallback(() => router.push('/hotline' as never), []);
   const emergencyLevel = useMemo(() => {
     if ((waterLevel?.stations ?? []).some((station) => station.status === 'Critical')) return 'Critical';
@@ -223,7 +224,7 @@ export default function HomeDashboard() {
         />
 
         <View style={styles.quickActions}>
-          <QuickAction icon={iconSources.evacuation} label="Evacuation" tone="red" />
+          <QuickAction icon={iconSources.evacuation} label="Evacuation" tone="red" onPress={openEvacuationMap} />
           <QuickAction icon={iconSources.hotline} label="Hotlines" tone="orange" onPress={openHotlines} />
           <QuickAction icon={iconSources.safetyTips} label="Safety Tips" tone="yellow" />
         </View>
