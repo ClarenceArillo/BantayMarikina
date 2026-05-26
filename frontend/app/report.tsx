@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native';
 
-import { useAppTheme } from '@/components/EmergencyUI';
+import { BackButton, useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
 import { ReportCard } from '@/components/ReportCard';
@@ -73,7 +73,7 @@ export default function ReportScreen() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow camera access to capture hazard media.');
+      Alert.alert('Camera Permission Needed', 'Allow camera access to capture hazard media.', [{ text: 'Try Again' }]);
       return;
     }
 
@@ -119,10 +119,10 @@ export default function ReportScreen() {
         onUploadProgress: setUploadProgress,
       });
 
-      Alert.alert('Report submitted', 'Your hazard report is now visible on the live map.');
+      Alert.alert('Report Submitted', 'Your hazard report is now visible on the live map.', [{ text: 'Done' }]);
       router.replace('/map' as never);
     } catch (submitError) {
-      Alert.alert('Unable to submit report', submitError instanceof Error ? submitError.message : 'Please try again.');
+      Alert.alert('Report Failed', submitError instanceof Error ? submitError.message : 'Please try again.', [{ text: 'Try Again' }]);
     } finally {
       setIsSubmitting(false);
       setUploadProgress(0);
@@ -133,9 +133,7 @@ export default function ReportScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Pressable style={[styles.backButton, { backgroundColor: theme.primaryTint }]} onPress={() => router.back()}>
-            <Text style={[styles.backText, { color: theme.primary }]}>{'<'}</Text>
-          </Pressable>
+          <BackButton onPress={() => router.back()} />
           <View>
             <Text style={[styles.title, { color: theme.text }]}>Report Hazard</Text>
             <Text style={[styles.subtitle, { color: theme.muted }]}>GPS location is attached automatically</Text>
@@ -278,19 +276,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 12,
-  },
-  backButton: {
-    alignItems: 'center',
-    borderRadius: 18,
-    height: 38,
-    justifyContent: 'center',
-    transform: [{ rotate: '180deg' }],
-    width: 38,
-  },
-  backText: {
-    fontSize: 30,
-    fontWeight: '800',
-    lineHeight: 32,
   },
   title: {
     fontSize: 24,

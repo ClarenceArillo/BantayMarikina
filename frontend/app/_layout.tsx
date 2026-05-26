@@ -1,9 +1,12 @@
+import { Asset } from 'expo-asset';
 import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 
 import { BottomNav } from '@/components/BottomNav';
 import { AuthSessionProvider } from '@/context/auth-context';
 import { SignupProvider } from '@/context/signup-context';
+import { preloadIconAssets } from '@/constants/icons';
 import { AppThemeProvider, useTheme } from '@/theme/ThemeProvider';
 
 type MainTab = 'home' | 'map' | 'report' | 'notification' | 'profile';
@@ -31,6 +34,10 @@ export default function RootLayout() {
 function ThemedStack() {
   const { colors, isDark } = useTheme();
   const activeTab = getActiveTab(usePathname());
+
+  useEffect(() => {
+    Asset.loadAsync(preloadIconAssets).catch(() => undefined);
+  }, []);
 
   return (
     <>

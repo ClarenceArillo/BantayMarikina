@@ -3,7 +3,7 @@ import { Image, Modal, SafeAreaView, ScrollView, StyleSheet, Text, View } from '
 import type { ImageSourcePropType } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 
-import { AppIcon, Badge, PressScale, useAppTheme } from '@/components/EmergencyUI';
+import { AppIcon, BackButton, Badge, PressScale, useAppTheme } from '@/components/EmergencyUI';
 import { Radius, Spacing, Typography } from '@/constants/theme';
 
 type SafetyPhase = 'before' | 'during' | 'after';
@@ -261,9 +261,7 @@ export const SafetyTipsModal = memo(function SafetyTipsModal({
         <Animated.View entering={FadeIn.duration(160)} exiting={FadeOut.duration(120)} style={styles.backdrop} />
         <Animated.View entering={FadeInDown.duration(300).springify()} style={[styles.sheet, { backgroundColor: theme.background }]}>
           <View style={styles.modalHeader}>
-            <PressScale onPress={onClose} style={[styles.backButton, { backgroundColor: theme.surface, borderColor: theme.borderSoft }]}>
-              <Text style={[styles.backText, { color: theme.primary }]}>Back</Text>
-            </PressScale>
+            <BackButton label="Back" onPress={onClose} />
             <View style={styles.headerCopy}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>Safety Tips</Text>
               <Text style={[styles.modalSubtitle, { color: theme.muted }]}>Fast reminders for common Marikina hazards</Text>
@@ -319,18 +317,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: Spacing.md,
     paddingHorizontal: Spacing.xl,
-  },
-  backButton: {
-    alignItems: 'center',
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    height: 38,
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-  },
-  backText: {
-    fontSize: Typography.body,
-    fontWeight: '900',
   },
   headerCopy: {
     flex: 1,

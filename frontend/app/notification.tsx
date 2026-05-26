@@ -1,10 +1,12 @@
 import { router } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import { useAppTheme } from '@/components/EmergencyUI';
 import { NotificationCard } from '@/components/NotificationCard';
 import { ReportFilterBar } from '@/components/ReportFilterBar';
+import { Icons } from '@/constants/icons';
 import { useAuthSession } from '@/context/auth-context';
 import { useNotifications } from '@/hooks/useNotifications';
 import { markNotificationRead } from '@/services/hazardReportService';
@@ -43,16 +45,28 @@ function groupNotifications(notifications: ReportNotification[]) {
   }, []);
 }
 
+function activeFilterCount(filters: ReportFilters) {
+  return [
+    filters.dateRange !== 'month',
+    filters.hazardType && filters.hazardType !== 'All',
+    filters.severity && filters.severity !== 'All',
+    filters.status && filters.status !== 'All',
+    filters.source && filters.source !== 'All',
+  ].filter(Boolean).length;
+}
+
 export default function NotificationScreen() {
   const theme = useAppTheme();
   const { session } = useAuthSession();
   const [filters, setFilters] = useState<ReportFilters>({ dateRange: 'month', hazardType: 'All', severity: 'All', status: 'All', source: 'All' });
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const pendingReadIdsRef = useRef(new Set<string>());
   const { notifications, isLoading, error } = useNotifications(session?.uid, session?.idToken, filters);
   const groups = useMemo(() => groupNotifications(notifications), [notifications]);
   const unreadCount = notifications.filter((notification) => !notification.read).length;
   const officialCount = notifications.filter((notification) => notification.source === 'official' || notification.type === 'official_alert').length;
+  const filterCount = activeFilterCount(filters);
   const listItems = useMemo(() => groups.flatMap((group) => [
     { id: `header-${group.title}`, title: group.title, type: 'header' as const },
     ...group.items.map((notification) => ({ id: notification.id, notification, type: 'notification' as const })),
@@ -105,7 +119,26 @@ export default function NotificationScreen() {
               <Text style={[styles.title, { color: theme.text }]}>Notifications</Text>
               <Text style={[styles.subtitle, { color: theme.muted }]}>{unreadCount} unread alerts | {officialCount} official</Text>
             </View>
-            <ReportFilterBar filters={filters} onChange={setFilters} />
+            <Pressable
+              onPress={() => setFiltersOpen((value) => !value)}
+              style={[
+                styles.filterToggle,
+                { backgroundColor: filtersOpen ? theme.primaryTint : theme.surface, borderColor: filtersOpen || filterCount ? theme.primary : theme.borderSoft },
+              ]}>
+              <Image source={Icons.filter} style={[styles.filterIcon, { tintColor: filtersOpen || filterCount ? theme.primary : theme.muted }]} resizeMode="contain" fadeDuration={0} />
+              <Text style={[styles.filterToggleText, { color: filtersOpen || filterCount ? theme.primary : theme.text }]}>Filters</Text>
+              {filterCount ? (
+                <View style={[styles.filterCount, { backgroundColor: theme.primary }]}>
+                  <Text style={styles.filterCountText}>{filterCount}</Text>
+                </View>
+              ) : null}
+              <Text style={[styles.filterChevron, { color: theme.muted }]}>{filtersOpen ? 'Hide' : 'Show'}</Text>
+            </Pressable>
+            {filtersOpen ? (
+              <Animated.View entering={FadeInDown.duration(220)} exiting={FadeOut.duration(120)} layout={LinearTransition.springify().damping(18)}>
+                <ReportFilterBar filters={filters} onChange={setFilters} />
+              </Animated.View>
+            ) : null}
             {isLoading ? <ActivityIndicator color={theme.primary} style={styles.loader} /> : null}
             {error ? <Text style={[styles.error, { color: theme.danger, backgroundColor: theme.dangerSoft }]}>{error}</Text> : null}
             {!isLoading && groups.length === 0 ? (
@@ -141,6 +174,41 @@ const styles = StyleSheet.create({
   },
   listHeader: {
     gap: 16,
+  },
+  filterToggle: {
+    alignItems: 'center',
+    borderRadius: 18,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 9,
+    minHeight: 50,
+    paddingHorizontal: 14,
+  },
+  filterIcon: {
+    height: 22,
+    width: 22,
+  },
+  filterToggleText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  filterCount: {
+    alignItems: 'center',
+    borderRadius: 11,
+    height: 22,
+    justifyContent: 'center',
+    minWidth: 22,
+    paddingHorizontal: 6,
+  },
+  filterCountText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  filterChevron: {
+    fontSize: 11,
+    fontWeight: '900',
   },
   title: {
     fontSize: 27,

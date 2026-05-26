@@ -12,8 +12,9 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { AppIcon, Badge, EmergencyCard, PressScale, SectionHeader, SoftCard, useAppTheme } from '@/components/EmergencyUI';
+import { AppIcon, BackButton, Badge, EmergencyCard, PressScale, SectionHeader, SoftCard, useAppTheme } from '@/components/EmergencyUI';
 import { Radius, Spacing, Typography } from '@/constants/theme';
+import { useTheme } from '@/theme/useTheme';
 
 const iconSources = {
   alert: require('@/assets/Icons/FireDep.png'),
@@ -55,7 +56,7 @@ const fireDepartments = [
 
 async function copyNumber(number: string) {
   await Clipboard.setStringAsync(number);
-  Alert.alert('Copied', `${number} copied to clipboard.`);
+  Alert.alert('Number Copied', `${number} is ready to paste or share.`, [{ text: 'Done' }]);
 }
 
 function Header() {
@@ -63,9 +64,7 @@ function Header() {
 
   return (
     <View style={[styles.header, { backgroundColor: theme.background, borderBottomColor: theme.borderSoft }]}>
-      <PressScale onPress={() => router.back()} style={[styles.backButton, { backgroundColor: theme.primaryTint }]}>
-        <Text style={[styles.backText, { color: theme.primary }]}>‹</Text>
-      </PressScale>
+      <BackButton onPress={() => router.back()} />
       <View style={styles.headerCopy}>
         <Text style={[styles.headerTitle, { color: theme.text }]}>Emergency Hotlines</Text>
         <Text style={[styles.headerSubtitle, { color: theme.muted }]}>Quick access to emergency services</Text>
@@ -150,6 +149,7 @@ function FireCard({ barangay, number }: { barangay: string; number: string }) {
 
 export default function HotlineScreen() {
   const theme = useAppTheme();
+  const { isDark } = useTheme();
   const [officesOpen, setOfficesOpen] = useState(true);
 
   return (
@@ -200,7 +200,7 @@ export default function HotlineScreen() {
           </View>
         </SoftCard>
 
-        <LinearGradient colors={['#f1f7fc', '#ffffff']} style={[styles.footerNote, { borderColor: theme.borderSoft }]}>
+        <LinearGradient colors={isDark ? ['#111827', '#172033'] : ['#f1f7fc', '#ffffff']} style={[styles.footerNote, { borderColor: theme.borderSoft }]}>
           <AppIcon source={iconSources.safetyTips} size={22} />
           <Text style={[styles.footerText, { color: theme.muted }]}>
             In immediate danger, call the main rescue hotline first and share your exact location.
@@ -228,18 +228,6 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.08,
     shadowRadius: 18,
-  },
-  backButton: {
-    alignItems: 'center',
-    borderRadius: Radius.md,
-    height: 44,
-    justifyContent: 'center',
-    width: 44,
-  },
-  backText: {
-    fontSize: 34,
-    fontWeight: '600',
-    lineHeight: 36,
   },
   headerCopy: {
     flex: 1,
@@ -441,3 +429,4 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 });
+

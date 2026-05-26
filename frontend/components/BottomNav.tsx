@@ -4,6 +4,7 @@ import type { ImageSourcePropType } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import { useAppTheme } from '@/components/EmergencyUI';
+import { Icons } from '@/constants/icons';
 import { useTheme } from '@/theme/useTheme';
 import { Radius } from '@/constants/theme';
 
@@ -15,24 +16,24 @@ type BottomNavProps = {
 
 const iconSources = {
   home: {
-    light: { inactive: require('@/assets/Icons/Home.png'), active: require('@/assets/Icons/Home (2).png') },
-    dark: { inactive: require('@/assets/Icons/Home.png'), active: require('@/assets/Icons/Home (2).png') },
+    light: { inactive: Icons.home, active: Icons.homeActive },
+    dark: { inactive: Icons.home, active: Icons.homeActive },
   },
   map: {
-    light: { inactive: require('@/assets/Icons/Map.png'), active: require('@/assets/Icons/Map (2).png') },
-    dark: { inactive: require('@/assets/Icons/Map.png'), active: require('@/assets/Icons/Map (2).png') },
+    light: { inactive: Icons.map, active: Icons.mapActive },
+    dark: { inactive: Icons.map, active: Icons.mapActive },
   },
   report: {
-    light: { inactive: require('@/assets/Icons/HazardReport.png'), active: require('@/assets/Icons/Report.png') },
-    dark: { inactive: require('@/assets/Icons/HazardReport.png'), active: require('@/assets/Icons/Report.png') },
+    light: { inactive: Icons.reportInactive, active: Icons.report },
+    dark: { inactive: Icons.reportInactive, active: Icons.report },
   },
   notification: {
-    light: { inactive: require('@/assets/Icons/Notification.png'), active: require('@/assets/Icons/Notification-Active.png') },
-    dark: { inactive: require('@/assets/Icons/Notification.png'), active: require('@/assets/Icons/Notification-Active.png') },
+    light: { inactive: Icons.notification, active: Icons.notificationActive },
+    dark: { inactive: Icons.notification, active: Icons.notificationActive },
   },
   profile: {
-    light: { inactive: require('@/assets/Icons/ProfileIcon.png'), active: require('@/assets/Icons/ProfileIcon-Active.png') },
-    dark: { inactive: require('@/assets/Icons/ProfileIcon.png'), active: require('@/assets/Icons/ProfileIcon-Active.png') },
+    light: { inactive: Icons.profile, active: Icons.profileActive },
+    dark: { inactive: Icons.profile, active: Icons.profileActive },
   },
 };
 
@@ -60,7 +61,7 @@ function NavIcon({ tab, active }: { tab: BottomNavTab; active: boolean }) {
 
   return (
     <Animated.View key={`${tab}-${active ? 'active' : 'inactive'}`} entering={FadeIn.duration(140)} exiting={FadeOut.duration(90)}>
-      <Image source={getTabIcon(tab, active, isDark)} style={styles.navIcon} resizeMode="contain" />
+      <Image source={getTabIcon(tab, active, isDark)} style={styles.navIcon} resizeMode="contain" fadeDuration={0} />
     </Animated.View>
   );
 }

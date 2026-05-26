@@ -1,5 +1,6 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { Radius, Spacing, Typography } from '@/constants/theme';
 import { useAppTheme } from '@/components/EmergencyUI';
 
 type AuthStatusModalProps = {
@@ -35,7 +36,7 @@ export function AuthStatusModal({
       <View style={[styles.overlay, { backgroundColor: theme.overlay }]}>
         <View style={[styles.statusCard, { backgroundColor: theme.surface }]}>
           <View style={[styles.iconCircle, { backgroundColor: isSuccess ? theme.successSoft : theme.dangerSoft }]}>
-            <Text style={[styles.iconMark, { color: isSuccess ? theme.success : theme.danger }]}>{isSuccess ? 'OK' : '!'}</Text>
+            <Text style={[styles.iconMark, { color: isSuccess ? theme.success : theme.danger }]}>{isSuccess ? '✓' : '!'}</Text>
           </View>
           <Text style={[styles.statusTitle, { color: isSuccess ? theme.success : theme.danger }]}>{title}</Text>
           {message ? <Text style={[styles.statusMessage, { color: theme.muted }]}>{message}</Text> : null}
@@ -77,11 +78,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     justifyContent: 'center',
-    padding: 24,
+    padding: Spacing.xxl,
   },
   statusCard: {
     alignItems: 'center',
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     minHeight: 250,
     overflow: 'hidden',
     paddingHorizontal: 18,
@@ -101,13 +102,14 @@ const styles = StyleSheet.create({
     lineHeight: 34,
   },
   statusTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: Typography.bodyLarge,
+    fontWeight: '900',
     marginTop: 8,
     textAlign: 'center',
   },
   statusMessage: {
-    fontSize: 11,
+    fontSize: Typography.caption,
+    fontWeight: '700',
     lineHeight: 15,
     marginTop: 5,
     paddingHorizontal: 12,
@@ -115,7 +117,7 @@ const styles = StyleSheet.create({
   },
   statusButton: {
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: Radius.pill,
     height: 43,
     justifyContent: 'center',
     marginTop: 14,
@@ -123,11 +125,11 @@ const styles = StyleSheet.create({
   },
   statusButtonText: {
     color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: Typography.body,
+    fontWeight: '900',
   },
   optionCard: {
-    borderRadius: 12,
+    borderRadius: Radius.lg,
     maxHeight: '78%',
     maxWidth: 340,
     padding: 18,
@@ -135,7 +137,7 @@ const styles = StyleSheet.create({
   },
   optionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '900',
     marginBottom: 10,
     textAlign: 'center',
   },
@@ -146,7 +148,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   optionRow: {
-    borderRadius: 8,
+    borderRadius: Radius.md,
     borderWidth: 1,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -161,6 +163,6 @@ const styles = StyleSheet.create({
   },
   cancelText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '900',
   },
 });
