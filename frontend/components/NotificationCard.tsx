@@ -27,6 +27,7 @@ function NotificationCardComponent({
   const color = String(severity) === 'Moderate' ? theme.warning : isHigh ? theme.danger : theme.primary;
   const background = String(severity) === 'Moderate' ? theme.warningSoft : isHigh ? theme.dangerSoft : theme.primaryTint;
   const imageUrl = notification.imageUrl || notification.report?.imageUrl;
+  const capturedAtLabel = notification.capturedAtLabel || notification.report?.capturedAtLabel;
 
   return (
     <Pressable
@@ -51,7 +52,16 @@ function NotificationCardComponent({
 
       {expanded ? (
         <View style={styles.expanded}>
-          {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.image} /> : null}
+          {imageUrl ? (
+            <View style={styles.imageFrame}>
+              <Image source={{ uri: imageUrl }} style={styles.image} />
+              {capturedAtLabel ? (
+                <View style={styles.timestampBadge}>
+                  <Text style={styles.timestampText}>{capturedAtLabel}</Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
           <Text style={[styles.body, { color: theme.text }]}>{notification.body || notification.report?.description || 'No details provided.'}</Text>
           <View style={styles.metaGrid}>
             <Text style={[styles.detail, { color: theme.muted }]}>Reporter: {notification.reporterName || notification.report?.reporterName || 'Resident'}</Text>
@@ -121,6 +131,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     height: 150,
     width: '100%',
+  },
+  imageFrame: {
+    position: 'relative',
+  },
+  timestampBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    bottom: 10,
+    left: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    position: 'absolute',
+  },
+  timestampText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
   },
   body: {
     fontSize: 13,

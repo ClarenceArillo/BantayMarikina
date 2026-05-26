@@ -3,7 +3,7 @@ import {
   addDoc,
   collection,
   doc,
-  getDocs,
+  getDoc,
   increment,
   limit,
   onSnapshot,
@@ -21,7 +21,7 @@ import {
 } from 'firebase/firestore';
 
 import { getFirebaseClients } from '@/config/firebase';
-import { deleteCloudinaryMedia, uploadToCloudinary, cloudinaryOptimizedUrl, cloudinaryVideoPosterUrl } from '@/services/cloudinaryService';
+import { deleteCloudinaryMedia, uploadToCloudinary, cloudinaryOptimizedUrl, cloudinaryTimestampUrl, cloudinaryVideoPosterUrl } from '@/services/cloudinaryService';
 import { subscribeWithRetry } from '@/services/realtime';
 import type {
   HazardReport,
@@ -37,6 +37,7 @@ const REPORTS_COLLECTION = 'Reports';
 const NOTIFICATIONS_COLLECTION = 'Notifications';
 const NOTIFICATION_READS_COLLECTION = 'NotificationReads';
 const MODERATION_LOGS_COLLECTION = 'ModerationLogs';
+const REPORT_SUBMISSION_GUARDS_COLLECTION = 'ReportSubmissionGuards';
 const USER_REPORT_CATEGORIES: ReportModerationCategory[] = [
   'false_report',
   'inaccurate_image',
@@ -52,6 +53,21 @@ const MARIKINA_BOUNDS = {
 };
 const RECENT_REPORT_COOLDOWN_MS = 60_000;
 const recentSubmitChecks = new Map<string, number>();
+
+function stripUndefinedFields<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedFields(item)) as T;
+  }
+
+  if (!value || typeof value !== 'object') return value;
+  if (value instanceof Date || value instanceof Timestamp) return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .map(([key, item]) => [key, stripUndefinedFields(item)])
+  ) as T;
+}
 
 function toDate(value: unknown) {
   if (!value) return null;
@@ -80,6 +96,8 @@ function normalizeReport(doc: QueryDocumentSnapshot<DocumentData>): HazardReport
 
   const media = data.media || (data.cloudinaryMedia ? [data.cloudinaryMedia] : []);
   const firstMedia = media[0];
+  const capturedAtLabel = data.capturedAtLabel || data.captured_at_label || '';
+  const mediaUrl = firstMedia?.secure_url || data.imageUrl || data.image_url;
 
   return {
     id: doc.id,
@@ -94,9 +112,10 @@ function normalizeReport(doc: QueryDocumentSnapshot<DocumentData>): HazardReport
     severity: data.severity,
     barangay: data.barangay,
     imageUrl: firstMedia?.resource_type === 'video'
-      ? cloudinaryVideoPosterUrl(firstMedia.secure_url)
-      : cloudinaryOptimizedUrl(data.imageUrl || data.image_url || firstMedia?.secure_url),
+      ? cloudinaryTimestampUrl(cloudinaryVideoPosterUrl(mediaUrl), capturedAtLabel)
+      : cloudinaryTimestampUrl(cloudinaryOptimizedUrl(mediaUrl), capturedAtLabel),
     media,
+    capturedAtLabel,
     reporterPhotoUrl: cloudinaryOptimizedUrl(data.reporterPhotoUrl || data.reporter_photo_url || data.userPhotoUrl, 160),
     status: data.status || 'active',
     source: data.source || 'community',
@@ -140,6 +159,7 @@ function normalizeNotification(
     hazardType: data.hazardType,
     severity: data.severity,
     imageUrl: data.imageUrl,
+    capturedAtLabel: data.capturedAtLabel || data.captured_at_label || report?.capturedAtLabel,
     latitude: data.latitude,
     longitude: data.longitude,
     barangay: data.barangay,
@@ -238,13 +258,16 @@ export async function submitHazardReport(input: HazardReportInput) {
       throw new Error('Please wait a minute before submitting another report.');
     }
 
-    const recentSnapshot = await getDocs(query(
-      collection(db, REPORTS_COLLECTION),
-      where('userId', '==', input.userId),
-      orderBy('timestamp', 'desc'),
-      limit(1)
-    ));
-    const lastReportAt = recentSnapshot.docs[0] ? toDate(recentSnapshot.docs[0].data().timestamp || recentSnapshot.docs[0].data().createdAt) : null;
+    let lastReportAt: Date | null = null;
+    try {
+      const guardSnapshot = await getDoc(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId));
+      lastReportAt = guardSnapshot.exists()
+        ? toDate(guardSnapshot.data().lastSubmittedAt || guardSnapshot.data().updatedAt)
+        : null;
+    } catch {
+      // Guard reads are a throttle optimization. They should never block emergency reporting.
+    }
+
     if (lastReportAt && Date.now() - lastReportAt.getTime() < RECENT_REPORT_COOLDOWN_MS) {
       recentSubmitChecks.set(input.userId, lastReportAt.getTime());
       throw new Error('Please wait a minute before submitting another report.');
@@ -261,11 +284,14 @@ export async function submitHazardReport(input: HazardReportInput) {
         resourceType: mediaResourceType,
       })
     : null;
+  const safeCloudinaryMedia = cloudinaryMedia
+    ? stripUndefinedFields(cloudinaryMedia)
+    : null;
   const imageUrl = cloudinaryMedia?.secure_url || null;
   const title = `${input.severity} ${input.hazardType}`;
 
   try {
-    const reportRef = await addDoc(collection(db, REPORTS_COLLECTION), {
+    const reportRef = await addDoc(collection(db, REPORTS_COLLECTION), stripUndefinedFields({
     title,
     hazardType: input.hazardType,
     hazard_type: input.hazardType,
@@ -282,8 +308,9 @@ export async function submitHazardReport(input: HazardReportInput) {
     reporter_photo_url: input.reporterPhotoUrl || '',
     imageUrl,
     image_url: imageUrl,
-    cloudinaryMedia,
-    media: cloudinaryMedia ? [cloudinaryMedia] : [],
+    cloudinaryMedia: safeCloudinaryMedia,
+    media: safeCloudinaryMedia ? [safeCloudinaryMedia] : [],
+    capturedAtLabel: input.capturedAtLabel || '',
     source: 'community',
     moderationStatus: 'visible',
     likeCount: 0,
@@ -294,9 +321,9 @@ export async function submitHazardReport(input: HazardReportInput) {
     timestamp: serverTimestamp(),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    });
+    }));
 
-    await setDoc(doc(db, NOTIFICATIONS_COLLECTION, `report_${reportRef.id}`), {
+    await setDoc(doc(db, NOTIFICATIONS_COLLECTION, `report_${reportRef.id}`), stripUndefinedFields({
     audience: 'all',
     type: 'new_report',
     reportId: reportRef.id,
@@ -311,9 +338,18 @@ export async function submitHazardReport(input: HazardReportInput) {
     reporterName: input.reporterName || 'Resident',
     reporterPhotoUrl: input.reporterPhotoUrl || '',
     createdAt: serverTimestamp(),
-    });
+    capturedAtLabel: input.capturedAtLabel || '',
+    }));
 
-    if (input.userId) recentSubmitChecks.set(input.userId, Date.now());
+    if (input.userId) {
+      recentSubmitChecks.set(input.userId, Date.now());
+      setDoc(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId), {
+        lastReportId: reportRef.id,
+        lastSubmittedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        userId: input.userId,
+      }, { merge: true }).catch(() => undefined);
+    }
     return reportRef;
   } catch (error) {
     if (cloudinaryMedia?.public_id && input.idToken) {

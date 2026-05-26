@@ -27,6 +27,7 @@ export type HazardReport = {
   barangay?: string;
   imageUrl?: string;
   media?: CloudinaryMedia[];
+  capturedAtLabel?: string;
   reporterPhotoUrl?: string;
   status: 'active' | 'pending' | 'resolved' | 'rejected';
   source?: 'official' | 'community';
@@ -65,6 +66,7 @@ export type HazardReportInput = {
   imageUri?: string;
   mediaSizeBytes?: number;
   mediaType?: 'image' | 'video';
+  capturedAtLabel?: string;
   onUploadProgress?: (progress: number) => void;
 };
 
@@ -92,6 +94,7 @@ export type ReportNotification = {
   hazardType?: string;
   severity?: string;
   imageUrl?: string;
+  capturedAtLabel?: string;
   latitude?: number;
   longitude?: number;
   barangay?: string;

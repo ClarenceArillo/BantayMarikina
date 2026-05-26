@@ -57,7 +57,16 @@ function ReportCardComponent({ report, onPress }: { report: HazardReport; onPres
         </View>
         <Text style={[styles.description, { color: theme.text }]} numberOfLines={2}>{report.description}</Text>
       </View>
-      {report.imageUrl ? <Image source={{ uri: report.imageUrl }} style={[styles.image, { backgroundColor: theme.surfaceMuted }]} fadeDuration={220} /> : null}
+      {report.imageUrl ? (
+        <View style={styles.mediaFrame}>
+          <Image source={{ uri: report.imageUrl }} style={[styles.image, { backgroundColor: theme.surfaceMuted }]} fadeDuration={220} />
+          {report.capturedAtLabel ? (
+            <View style={styles.timestampBadge}>
+              <Text style={styles.timestampText}>{report.capturedAtLabel}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
       <View style={styles.footer}>
         <View style={styles.locationRow}>
           <Image source={pinIcon} style={[styles.tinyIcon, { tintColor: theme.primary }]} resizeMode="contain" />
@@ -97,6 +106,22 @@ const styles = StyleSheet.create({
   image: {
     height: 156,
     width: '100%',
+  },
+  mediaFrame: {
+    position: 'relative',
+  },
+  timestampBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    bottom: 10,
+    left: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    position: 'absolute',
+  },
+  timestampText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '900',
   },
   body: {
     gap: 10,

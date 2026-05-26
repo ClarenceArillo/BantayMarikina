@@ -122,17 +122,20 @@ function xhrUpload(uploadUrl: string, formData: FormData, onProgress?: (progress
     xhr.onload = () => {
       const data = JSON.parse(xhr.responseText || '{}');
       if (xhr.status >= 200 && xhr.status < 300) {
-        resolve({
+        const media: CloudinaryMedia = {
           secure_url: data.secure_url,
           public_id: data.public_id,
           resource_type: data.resource_type,
-          format: data.format,
-          width: data.width,
-          height: data.height,
-          duration: data.duration,
-          bytes: data.bytes,
-          createdAt: data.created_at,
-        });
+        };
+
+        if (data.format !== undefined && data.format !== null) media.format = data.format;
+        if (Number.isFinite(data.width)) media.width = data.width;
+        if (Number.isFinite(data.height)) media.height = data.height;
+        if (Number.isFinite(data.duration)) media.duration = data.duration;
+        if (Number.isFinite(data.bytes)) media.bytes = data.bytes;
+        if (data.created_at !== undefined && data.created_at !== null) media.createdAt = data.created_at;
+
+        resolve(media);
         return;
       }
       reject(new Error(data.error?.message || `Upload failed (${xhr.status})`));
@@ -155,6 +158,14 @@ export function cloudinaryVideoPosterUrl(url?: string, width = 900) {
   if (!url || !url.includes('/video/upload/')) return cloudinaryOptimizedUrl(url, width);
   const poster = url.replace('/video/upload/', `/video/upload/f_jpg,q_auto:eco,c_limit,w_${width}/`);
   return poster.replace(/\.[a-z0-9]+(\?.*)?$/i, '.jpg$1');
+}
+
+export function cloudinaryTimestampUrl(url?: string, label?: string) {
+  if (!url || !label || !url.includes('/upload/')) return url || '';
+  if (url.includes('/l_text:')) return url;
+  const encodedLabel = encodeURIComponent(label).replace(/[!'()*]/g, (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`);
+  const overlay = `l_text:Arial_32_bold:${encodedLabel},co_rgb:ffffff,b_rgb:000000/fl_layer_apply,g_south_west,x_18,y_18`;
+  return url.replace('/upload/', `/upload/${overlay}/`);
 }
 
 export async function uploadToCloudinary({

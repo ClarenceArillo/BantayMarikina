@@ -121,6 +121,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /ReportSubmissionGuards/{userId} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow create, update: if signedIn()
+        && request.auth.uid == userId
+        && request.resource.data.userId == request.auth.uid;
+      allow delete: if false;
+    }
+
     match /ModerationLogs/{logId} {
       allow read: if signedIn();
       allow create: if signedIn();

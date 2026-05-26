@@ -91,7 +91,16 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
               </View>
             </View>
 
-            {report.imageUrl ? <Image source={{ uri: report.imageUrl }} style={[styles.photo, { backgroundColor: theme.surfaceMuted }]} fadeDuration={220} /> : null}
+            {report.imageUrl ? (
+              <View style={styles.photoFrame}>
+                <Image source={{ uri: report.imageUrl }} style={[styles.photo, { backgroundColor: theme.surfaceMuted }]} fadeDuration={220} />
+                {report.capturedAtLabel ? (
+                  <View style={styles.timestampBadge}>
+                    <Text style={styles.timestampText}>{report.capturedAtLabel}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
             <Text style={[styles.description, { color: theme.text }]}>{report.description || 'No description provided.'}</Text>
 
             <View style={styles.engagementRow}>
@@ -211,6 +220,16 @@ const styles = StyleSheet.create({
   severityBadge: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
   severityText: { fontSize: 11, fontWeight: '900' },
   photo: { borderRadius: 12, height: 176, width: '100%' },
+  photoFrame: { position: 'relative' },
+  timestampBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    bottom: 10,
+    left: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    position: 'absolute',
+  },
+  timestampText: { color: '#fff', fontSize: 12, fontWeight: '900' },
   engagementRow: { flexDirection: 'row', gap: 8 },
   engagementButton: { alignItems: 'center', borderRadius: 13, flex: 1, flexDirection: 'row', gap: 5, justifyContent: 'center', paddingVertical: 10 },
   actionIcon: { height: 15, width: 15 },

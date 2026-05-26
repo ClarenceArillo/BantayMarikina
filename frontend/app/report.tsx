@@ -41,6 +41,7 @@ export default function ReportScreen() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [mediaSizeBytes, setMediaSizeBytes] = useState<number | undefined>();
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [capturedAtLabel, setCapturedAtLabel] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
@@ -60,15 +61,23 @@ export default function ReportScreen() {
     [location]
   );
 
-  async function pickImage() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  function formatCapturedAt(date: Date) {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return [
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+      `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
+    ].join(' ');
+  }
+
+  async function captureMedia() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow photo access to attach an image.');
+      Alert.alert('Permission needed', 'Allow camera access to capture hazard media.');
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [4, 3],
       mediaTypes: ImagePicker.MediaTypeOptions.All,
@@ -81,6 +90,7 @@ export default function ReportScreen() {
       setImageUri(asset.uri);
       setMediaSizeBytes(asset.fileSize);
       setMediaType(asset.type === 'video' ? 'video' : 'image');
+      setCapturedAtLabel(formatCapturedAt(new Date()));
     }
   }
 
@@ -105,6 +115,7 @@ export default function ReportScreen() {
         imageUri: imageUri || undefined,
         mediaSizeBytes,
         mediaType,
+        capturedAtLabel: capturedAtLabel || undefined,
         onUploadProgress: setUploadProgress,
       });
 
@@ -203,18 +214,25 @@ export default function ReportScreen() {
 
         <View style={styles.section}>
           <Text style={[styles.label, { color: theme.text }]}>Optional Media</Text>
-          <Pressable style={[styles.imagePicker, { backgroundColor: theme.input, borderColor: theme.border }]} onPress={pickImage}>
+          <Pressable style={[styles.imagePicker, { backgroundColor: theme.input, borderColor: theme.border }]} onPress={captureMedia}>
             {imageUri ? (
-              <Image source={{ uri: imageUri }} style={styles.previewImage} />
+              <>
+                <Image source={{ uri: imageUri }} style={styles.previewImage} />
+                {capturedAtLabel ? (
+                  <View style={styles.timestampBadge}>
+                    <Text style={styles.timestampText}>{capturedAtLabel}</Text>
+                  </View>
+                ) : null}
+              </>
             ) : (
               <>
                 <Image source={iconSources.camera} style={[styles.cameraIcon, { tintColor: theme.primary }]} resizeMode="contain" />
-                <Text style={[styles.imagePickerText, { color: theme.primary }]}>Attach photo or video</Text>
+                <Text style={[styles.imagePickerText, { color: theme.primary }]}>Open camera</Text>
               </>
             )}
           </Pressable>
           {imageUri ? (
-            <Text style={[styles.counter, { color: theme.muted }]}>{mediaType === 'video' ? 'Video attached, max 30 seconds' : 'Image compressed before upload'}</Text>
+            <Text style={[styles.counter, { color: theme.muted }]}>{mediaType === 'video' ? 'Video captured, max 30 seconds' : 'Photo captured with timestamp'}</Text>
           ) : null}
         </View>
 
@@ -386,6 +404,19 @@ const styles = StyleSheet.create({
   previewImage: {
     height: '100%',
     width: '100%',
+  },
+  timestampBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    bottom: 10,
+    left: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    position: 'absolute',
+  },
+  timestampText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
   },
   submitButton: {
     alignItems: 'center',
