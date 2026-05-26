@@ -1,10 +1,8 @@
 import {
   Timestamp,
-  addDoc,
   collection,
   doc,
   getDoc,
-  increment,
   limit,
   onSnapshot,
   orderBy,
@@ -12,7 +10,7 @@ import {
   serverTimestamp,
   runTransaction,
   setDoc,
-  updateDoc,
+  writeBatch,
   where,
   type DocumentData,
   type FirestoreError,
@@ -36,15 +34,8 @@ import type {
 const REPORTS_COLLECTION = 'Reports';
 const NOTIFICATIONS_COLLECTION = 'Notifications';
 const NOTIFICATION_READS_COLLECTION = 'NotificationReads';
-const MODERATION_LOGS_COLLECTION = 'ModerationLogs';
 const REPORT_SUBMISSION_GUARDS_COLLECTION = 'ReportSubmissionGuards';
-const USER_REPORT_CATEGORIES: ReportModerationCategory[] = [
-  'false_report',
-  'inaccurate_image',
-  'misleading_information',
-  'spam',
-  'other',
-];
+const COMMENT_SUBMISSION_GUARDS_COLLECTION = 'CommentSubmissionGuards';
 const MARIKINA_BOUNDS = {
   minLat: 14.57,
   maxLat: 14.72,
@@ -53,6 +44,15 @@ const MARIKINA_BOUNDS = {
 };
 const RECENT_REPORT_COOLDOWN_MS = 60_000;
 const recentSubmitChecks = new Map<string, number>();
+
+function sanitizeText(value: string, maxLength: number) {
+  return value
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/[<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, maxLength);
+}
 
 function stripUndefinedFields<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -258,7 +258,7 @@ export function isInsideMarikina(latitude: number, longitude: number) {
 }
 
 export function validateHazardReport(input: HazardReportInput) {
-  const description = input.description.trim();
+  const description = sanitizeText(input.description, 240);
 
   if (!description || description.length < 8) {
     throw new Error('Please add a short description with at least 8 characters.');
@@ -275,29 +275,31 @@ export function validateHazardReport(input: HazardReportInput) {
 
 export async function submitHazardReport(input: HazardReportInput) {
   validateHazardReport(input);
+  if (!input.userId) {
+    throw new Error('Please sign in before submitting a report.');
+  }
 
   const { db } = getFirebaseClients();
-  if (input.userId) {
-    const lastLocalSubmitAt = recentSubmitChecks.get(input.userId) || 0;
-    if (Date.now() - lastLocalSubmitAt < RECENT_REPORT_COOLDOWN_MS) {
-      throw new Error('Please wait a minute before submitting another report.');
-    }
-
-    let lastReportAt: Date | null = null;
-    try {
-      const guardSnapshot = await getDoc(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId));
-      lastReportAt = guardSnapshot.exists()
-        ? toDate(guardSnapshot.data().lastSubmittedAt || guardSnapshot.data().updatedAt)
-        : null;
-    } catch {
-      // Guard reads are a throttle optimization. They should never block emergency reporting.
-    }
-
-    if (lastReportAt && Date.now() - lastReportAt.getTime() < RECENT_REPORT_COOLDOWN_MS) {
-      recentSubmitChecks.set(input.userId, lastReportAt.getTime());
-      throw new Error('Please wait a minute before submitting another report.');
-    }
+  const lastLocalSubmitAt = recentSubmitChecks.get(input.userId) || 0;
+  if (Date.now() - lastLocalSubmitAt < RECENT_REPORT_COOLDOWN_MS) {
+    throw new Error('Please wait a minute before submitting another report.');
   }
+
+  let lastReportAt: Date | null = null;
+  try {
+    const guardSnapshot = await getDoc(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId));
+    lastReportAt = guardSnapshot.exists()
+      ? toDate(guardSnapshot.data().lastSubmittedAt || guardSnapshot.data().updatedAt)
+      : null;
+  } catch {
+    // Guard reads are a throttle optimization. Server rules still enforce the cooldown.
+  }
+
+  if (lastReportAt && Date.now() - lastReportAt.getTime() < RECENT_REPORT_COOLDOWN_MS) {
+    recentSubmitChecks.set(input.userId, lastReportAt.getTime());
+    throw new Error('Please wait a minute before submitting another report.');
+  }
+
   const mediaResourceType = input.mediaType === 'video' ? 'video' : 'image';
   const cloudinaryMedia = input.imageUri && input.idToken
     ? await uploadToCloudinary({
@@ -314,13 +316,15 @@ export async function submitHazardReport(input: HazardReportInput) {
     : null;
   const imageUrl = cloudinaryMedia?.secure_url || null;
   const title = `${input.severity} ${input.hazardType}`;
+  const cleanDescription = sanitizeText(input.description, 240);
 
   try {
-    const reportRef = await addDoc(collection(db, REPORTS_COLLECTION), stripUndefinedFields({
+    const reportRef = doc(collection(db, REPORTS_COLLECTION));
+    const reportPayload = stripUndefinedFields({
     title,
     hazardType: input.hazardType,
     hazard_type: input.hazardType,
-    description: input.description.trim(),
+    description: cleanDescription,
     latitude: input.latitude,
     longitude: input.longitude,
     accuracyMeters: input.accuracyMeters ?? null,
@@ -346,35 +350,19 @@ export async function submitHazardReport(input: HazardReportInput) {
     timestamp: serverTimestamp(),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    }));
+    });
+    const batch = writeBatch(db);
 
-    await setDoc(doc(db, NOTIFICATIONS_COLLECTION, `report_${reportRef.id}`), stripUndefinedFields({
-    audience: 'all',
-    type: 'new_report',
-    reportId: reportRef.id,
-    title,
-    body: input.description.trim(),
-    hazardType: input.hazardType,
-    severity: input.severity,
-    imageUrl,
-    latitude: input.latitude,
-    longitude: input.longitude,
-    barangay: input.barangay || '',
-    reporterName: input.reporterName || 'Resident',
-    reporterPhotoUrl: input.reporterPhotoUrl || '',
-    createdAt: serverTimestamp(),
-    capturedAtLabel: input.capturedAtLabel || '',
-    }));
+    batch.set(reportRef, reportPayload);
+    batch.set(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId), {
+      lastReportId: reportRef.id,
+      lastSubmittedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      userId: input.userId,
+    }, { merge: true });
 
-    if (input.userId) {
-      recentSubmitChecks.set(input.userId, Date.now());
-      setDoc(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId), {
-        lastReportId: reportRef.id,
-        lastSubmittedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        userId: input.userId,
-      }, { merge: true }).catch(() => undefined);
-    }
+    await batch.commit();
+    recentSubmitChecks.set(input.userId, Date.now());
     return reportRef;
   } catch (error) {
     if (cloudinaryMedia?.public_id && input.idToken) {
@@ -594,7 +582,6 @@ export async function recordReportView(reportId: string, userId?: string) {
 
   const { db } = getFirebaseClients();
   const viewRef = doc(db, REPORTS_COLLECTION, reportId, 'userViews', userId);
-  const reportRef = doc(db, REPORTS_COLLECTION, reportId);
 
   await runTransaction(db, async (transaction) => {
     const viewSnapshot = await transaction.get(viewRef);
@@ -604,55 +591,50 @@ export async function recordReportView(reportId: string, userId?: string) {
       userId,
       createdAt: serverTimestamp(),
     });
-    transaction.update(reportRef, {
-      viewCount: increment(1),
-      updatedAt: serverTimestamp(),
-    });
   });
 }
 
 export async function toggleReportLike(reportId: string, userId: string) {
   const { db } = getFirebaseClients();
   const likeRef = doc(db, REPORTS_COLLECTION, reportId, 'likes', userId);
-  const reportRef = doc(db, REPORTS_COLLECTION, reportId);
 
   await runTransaction(db, async (transaction) => {
     const likeSnapshot = await transaction.get(likeRef);
 
     if (likeSnapshot.exists()) {
       transaction.delete(likeRef);
-      transaction.update(reportRef, { likeCount: increment(-1), updatedAt: serverTimestamp() });
       return;
     }
 
     transaction.set(likeRef, { userId, createdAt: serverTimestamp() });
-    transaction.update(reportRef, { likeCount: increment(1), updatedAt: serverTimestamp() });
   });
 }
 
 export async function addReportComment(reportId: string, userId: string, userName: string, body: string, userPhotoUrl = '') {
-  const cleanBody = body.trim();
+  const cleanBody = sanitizeText(body, 400);
   if (cleanBody.length < 2) throw new Error('Please add a longer comment.');
   if (cleanBody.length > 400) throw new Error('Comments are limited to 400 characters.');
 
   const { db } = getFirebaseClients();
-  await addDoc(collection(db, REPORTS_COLLECTION, reportId, 'comments'), {
+  const commentRef = doc(collection(db, REPORTS_COLLECTION, reportId, 'comments'));
+  const batch = writeBatch(db);
+
+  batch.set(commentRef, {
     userId,
-    userName: userName || 'Resident',
+    userName: sanitizeText(userName || 'Resident', 60) || 'Resident',
     userPhotoUrl,
     body: cleanBody,
     createdAt: serverTimestamp(),
   });
-  await updateDoc(doc(db, REPORTS_COLLECTION, reportId), {
-    commentCount: increment(1),
+  batch.set(doc(db, COMMENT_SUBMISSION_GUARDS_COLLECTION, userId), {
+    lastCommentId: commentRef.id,
+    lastSubmittedAt: serverTimestamp(),
+    reportId,
     updatedAt: serverTimestamp(),
-  });
-}
+    userId,
+  }, { merge: true });
 
-function getDominantCategory(categories: Record<string, number>) {
-  return USER_REPORT_CATEGORIES.reduce<ReportModerationCategory>((dominant, category) => {
-    return (categories[category] || 0) > (categories[dominant] || 0) ? category : dominant;
-  }, 'other');
+  await batch.commit();
 }
 
 export async function reportCommunityPost(
@@ -662,56 +644,19 @@ export async function reportCommunityPost(
   note = ''
 ) {
   const { db } = getFirebaseClients();
-  const reportRef = doc(db, REPORTS_COLLECTION, reportId);
   const userReportRef = doc(db, REPORTS_COLLECTION, reportId, 'userReports', userId);
-  const moderationLogRef = doc(collection(db, MODERATION_LOGS_COLLECTION));
+  const cleanNote = sanitizeText(note, 240);
 
   await runTransaction(db, async (transaction) => {
-    const reportSnapshot = await transaction.get(reportRef);
     const userReportSnapshot = await transaction.get(userReportRef);
 
-    if (!reportSnapshot.exists()) throw new Error('Report no longer exists.');
     if (userReportSnapshot.exists()) return;
-
-    const reportData = reportSnapshot.data();
-    const nextReportCount = (reportData.userReportCount || 0) + 1;
-    const viewCount = Math.max(reportData.viewCount || 0, 1);
-    const categoryCounts = {
-      ...(reportData.reportCategoryCounts || {}),
-      [category]: (reportData.reportCategoryCounts?.[category] || 0) + 1,
-    };
-    const dominantCategory = getDominantCategory(categoryCounts);
-    const shouldRemove = nextReportCount / viewCount > 0.5;
 
     transaction.set(userReportRef, {
       userId,
       category,
-      note: note.trim(),
+      note: cleanNote,
       createdAt: serverTimestamp(),
     });
-
-    transaction.update(reportRef, {
-      userReportCount: nextReportCount,
-      reportCategoryCounts: categoryCounts,
-      moderationStatus: shouldRemove ? 'removed' : reportData.moderationStatus || 'visible',
-      status: shouldRemove ? 'rejected' : reportData.status || 'active',
-      removedReason: shouldRemove ? dominantCategory : reportData.removedReason || null,
-      updatedAt: serverTimestamp(),
-    });
-
-    if (shouldRemove) {
-      transaction.set(moderationLogRef, {
-        reportId,
-        reporterId: reportData.userId || null,
-        reportCount: nextReportCount,
-        uniqueViews: viewCount,
-        dominantCategory,
-        categoryCounts,
-        action: 'auto_removed',
-        createdAt: serverTimestamp(),
-      });
-
-      // Cross-user moderation notifications are created by the Cloud Function onReportRemoved.
-    }
   });
 }

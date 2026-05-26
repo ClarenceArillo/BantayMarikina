@@ -3,6 +3,7 @@ const router = express.Router();
 const { db, admin } = require('../firebase');
 const axios = require('axios');
 const https = require('https');
+const { createRateLimiter, sanitizeText, validateEmail } = require('../middleware/security');
 
 const firebaseAuthHttp = axios.create({
   httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 20 }),
@@ -36,7 +37,7 @@ function normalizeEmail(email) {
 }
 
 function normalizeUsername(username) {
-  return String(username || '').trim();
+  return sanitizeText(username, 24);
 }
 
 function normalizeUsernameKey(username) {
@@ -158,6 +159,19 @@ function buildProfileResponse(uid, userData) {
   };
 }
 
+const authAttemptLimiter = createRateLimiter({
+  keyPrefix: 'auth-attempt',
+  limit: 12,
+  windowMs: 15 * 60_000,
+  message: 'Too many authentication attempts. Please wait before trying again.',
+});
+
+const profileUpdateLimiter = createRateLimiter({
+  keyPrefix: 'profile-update',
+  limit: 30,
+  windowMs: 60_000,
+});
+
 async function findUserByUsername(username) {
   const usernameLower = normalizeUsernameKey(username);
 
@@ -223,7 +237,7 @@ router.post('/firebase-token', requireAuthenticatedUser, async (req, res) => {
   }
 });
 
-router.patch('/me', requireAuthenticatedUser, async (req, res) => {
+router.patch('/me', requireAuthenticatedUser, profileUpdateLimiter, async (req, res) => {
   try {
     const {
       first_name, middle_name, last_name, suffix,
@@ -232,16 +246,19 @@ router.patch('/me', requireAuthenticatedUser, async (req, res) => {
     } = req.body;
 
     const cleanEmail = normalizeEmail(email);
-    const cleanFirstName = String(first_name || '').trim();
-    const cleanMiddleName = String(middle_name || '').trim();
-    const cleanLastName = String(last_name || '').trim();
-    const cleanSuffix = String(suffix || '').trim();
+    const cleanFirstName = sanitizeText(first_name, 60);
+    const cleanMiddleName = sanitizeText(middle_name, 60);
+    const cleanLastName = sanitizeText(last_name, 60);
+    const cleanSuffix = sanitizeText(suffix, 20);
     const fullName = [cleanFirstName, cleanMiddleName, cleanLastName, cleanSuffix]
       .filter(Boolean)
       .join(' ');
 
     if (!cleanFirstName || !cleanLastName || !cleanEmail) {
       return res.status(400).json({ error: 'First name, last name, and email are required' });
+    }
+    if (!validateEmail(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
     }
 
     const userRef = db.collection('Users').doc(req.auth.uid);
@@ -256,13 +273,13 @@ router.patch('/me', requireAuthenticatedUser, async (req, res) => {
       middle_name: cleanMiddleName,
       last_name: cleanLastName,
       suffix: cleanSuffix,
-      gender: String(gender || '').trim(),
-      contact_number: String(contact_number || '').trim(),
+      gender: sanitizeText(gender, 40),
+      contact_number: sanitizeText(contact_number, 32),
       email: cleanEmail,
       email_lower: cleanEmail,
-      barangay: String(barangay || '').trim(),
-      street_block: String(street_block || '').trim(),
-      house_number: String(house_number || '').trim(),
+      barangay: sanitizeText(barangay, 80),
+      street_block: sanitizeText(street_block, 120),
+      house_number: sanitizeText(house_number, 40),
       name: {
         first: cleanFirstName,
         middle: cleanMiddleName,
@@ -271,9 +288,9 @@ router.patch('/me', requireAuthenticatedUser, async (req, res) => {
         full: fullName,
       },
       address: {
-        barangay: String(barangay || '').trim(),
-        street_block: String(street_block || '').trim(),
-        house_number: String(house_number || '').trim(),
+        barangay: sanitizeText(barangay, 80),
+        street_block: sanitizeText(street_block, 120),
+        house_number: sanitizeText(house_number, 40),
       },
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -286,7 +303,7 @@ router.patch('/me', requireAuthenticatedUser, async (req, res) => {
   }
 });
 
-router.patch('/me/username', requireAuthenticatedUser, async (req, res) => {
+router.patch('/me/username', requireAuthenticatedUser, profileUpdateLimiter, async (req, res) => {
   try {
     const cleanUsername = normalizeUsername(req.body.username);
     const usernameLower = normalizeUsernameKey(cleanUsername);
@@ -319,7 +336,7 @@ router.patch('/me/username', requireAuthenticatedUser, async (req, res) => {
   }
 });
 
-router.patch('/me/password', requireAuthenticatedUser, async (req, res) => {
+router.patch('/me/password', requireAuthenticatedUser, authAttemptLimiter, async (req, res) => {
   try {
     const currentPassword = String(req.body.current_password || '');
     const newPassword = String(req.body.new_password || '');
@@ -370,7 +387,7 @@ router.patch('/me/password', requireAuthenticatedUser, async (req, res) => {
 });
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', authAttemptLimiter, async (req, res) => {
   try {
     const {
       first_name, middle_name, last_name, suffix,
@@ -382,18 +399,30 @@ router.post('/register', async (req, res) => {
     const cleanEmail = normalizeEmail(email);
     const cleanUsername = normalizeUsername(username);
     const usernameLower = normalizeUsernameKey(cleanUsername);
-    const fullName = [first_name, middle_name, last_name, suffix]
-      .map((part) => String(part || '').trim())
+    const cleanFirstName = sanitizeText(first_name, 60);
+    const cleanMiddleName = sanitizeText(middle_name, 60);
+    const cleanLastName = sanitizeText(last_name, 60);
+    const cleanSuffix = sanitizeText(suffix, 20);
+    const fullName = [cleanFirstName, cleanMiddleName, cleanLastName, cleanSuffix]
       .filter(Boolean)
       .join(' ');
 
-    if (!first_name || !last_name || !cleanEmail || !cleanUsername || !password || !confirm_password) {
+    if (!cleanFirstName || !cleanLastName || !cleanEmail || !cleanUsername || !password || !confirm_password) {
       return res.status(400).json({ error: 'Please complete all required fields' });
+    }
+    if (!validateEmail(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+    if (!/^[a-zA-Z0-9._-]{3,24}$/.test(cleanUsername)) {
+      return res.status(400).json({ error: 'Username must be 3-24 letters, numbers, dots, dashes, or underscores.' });
     }
 
     // Check if passwords match
     if (password !== confirm_password) {
       return res.status(400).json({ error: 'Passwords do not match' });
+    }
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: 'Use at least 8 characters with uppercase, lowercase, and a number.' });
     }
 
     // Check if username already exists
@@ -415,30 +444,30 @@ router.post('/register', async (req, res) => {
     try {
       // Save profile data only. Passwords stay in Firebase Auth.
       await db.collection('Users').doc(userRecord.uid).set({
-        first_name: String(first_name || '').trim(),
-        middle_name: String(middle_name || '').trim(),
-        last_name: String(last_name || '').trim(),
-        suffix: String(suffix || '').trim(),
-        gender: String(gender || '').trim(),
-        contact_number: String(contact_number || '').trim(),
+        first_name: cleanFirstName,
+        middle_name: cleanMiddleName,
+        last_name: cleanLastName,
+        suffix: cleanSuffix,
+        gender: sanitizeText(gender, 40),
+        contact_number: sanitizeText(contact_number, 32),
         email: cleanEmail,
         email_lower: cleanEmail,
-        barangay: String(barangay || '').trim(),
-        street_block: String(street_block || '').trim(),
-        house_number: String(house_number || '').trim(),
+        barangay: sanitizeText(barangay, 80),
+        street_block: sanitizeText(street_block, 120),
+        house_number: sanitizeText(house_number, 40),
         username: cleanUsername,
         username_lower: usernameLower,
         name: {
-          first: String(first_name || '').trim(),
-          middle: String(middle_name || '').trim(),
-          last: String(last_name || '').trim(),
-          suffix: String(suffix || '').trim(),
+          first: cleanFirstName,
+          middle: cleanMiddleName,
+          last: cleanLastName,
+          suffix: cleanSuffix,
           full: fullName,
         },
         address: {
-          barangay: String(barangay || '').trim(),
-          street_block: String(street_block || '').trim(),
-          house_number: String(house_number || '').trim(),
+          barangay: sanitizeText(barangay, 80),
+          street_block: sanitizeText(street_block, 120),
+          house_number: sanitizeText(house_number, 40),
         },
         role: 'resident',
         created_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -463,7 +492,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login with email/username + password
-router.post('/login', async (req, res) => {
+router.post('/login', authAttemptLimiter, async (req, res) => {
   try {
     const { email, identifier, username, password } = req.body;
     const loginIdentifier = identifier || email || username;
@@ -547,7 +576,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Send Firebase Auth password reset email
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', authAttemptLimiter, async (req, res) => {
   try {
     const cleanEmail = normalizeEmail(req.body.email);
     const firebaseApiKey = getFirebaseApiKey();

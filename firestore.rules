@@ -6,6 +6,39 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function hasRole(roles) {
+      return signedIn() && request.auth.token.role in roles;
+    }
+
+    function isAdmin() {
+      return hasRole(['admin', 'official', 'responder', 'moderator']);
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isCleanText(value, min, max) {
+      return value is string
+        && value.size() >= min
+        && value.size() <= max
+        && !value.matches('.*(<[sS][cC][rR][iI][pP][tT]|[jJ][aA][vV][aA][sS][cC][rR][iI][pP][tT]:|[dD][aA][tT][aA]:[tT][eE][xX][tT]/[hH][tT][mM][lL]|[oO][nN][eE][rR][rR][oO][rR]\\s*=|[oO][nN][lL][oO][aA][dD]\\s*=).*');
+    }
+
+    function validTimestamp(value) {
+      return value == request.time;
+    }
+
+    function validCloudinaryUrl(value) {
+      return value == ''
+        || value == null
+        || (
+          value is string
+          && value.size() <= 500
+          && value.matches('https://res\\.cloudinary\\.com/.*')
+        );
+    }
+
     function validMarikinaPoint() {
       return request.resource.data.latitude is number
         && request.resource.data.longitude is number
@@ -16,7 +49,51 @@ service cloud.firestore {
     }
 
     function validHazardReport() {
-      return request.resource.data.hazardType in [
+      return request.resource.data.keys().hasOnly([
+          'title',
+          'hazardType',
+          'hazard_type',
+          'description',
+          'latitude',
+          'longitude',
+          'accuracyMeters',
+          'severity',
+          'barangay',
+          'userId',
+          'sender_id',
+          'reporterName',
+          'reporterPhotoUrl',
+          'reporter_photo_url',
+          'imageUrl',
+          'image_url',
+          'cloudinaryMedia',
+          'media',
+          'capturedAtLabel',
+          'source',
+          'moderationStatus',
+          'likeCount',
+          'commentCount',
+          'viewCount',
+          'userReportCount',
+          'status',
+          'timestamp',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'hazardType',
+          'description',
+          'latitude',
+          'longitude',
+          'severity',
+          'userId',
+          'status',
+          'source',
+          'moderationStatus',
+          'createdAt',
+          'updatedAt'
+        ])
+        && request.resource.data.hazardType in [
           'Flood',
           'Fire',
           'Landslide',
@@ -25,31 +102,68 @@ service cloud.firestore {
           'Power Outage',
           'Others'
         ]
-        && request.resource.data.description is string
-        && request.resource.data.description.size() >= 8
-        && request.resource.data.description.size() <= 240
+        && isCleanText(request.resource.data.description, 8, 240)
         && request.resource.data.severity in ['Low', 'Moderate', 'High', 'Critical']
-        && request.resource.data.status in ['active', 'pending']
+        && request.resource.data.status == 'active'
+        && request.resource.data.source == 'community'
+        && request.resource.data.moderationStatus == 'visible'
+        && request.resource.data.likeCount == 0
+        && request.resource.data.commentCount == 0
+        && request.resource.data.viewCount == 0
+        && request.resource.data.userReportCount == 0
+        && validTimestamp(request.resource.data.createdAt)
+        && validTimestamp(request.resource.data.updatedAt)
         && validMarikinaPoint();
+    }
+
+    function reportGuardPath(userId) {
+      return /databases/$(database)/documents/ReportSubmissionGuards/$(userId);
+    }
+
+    function commentGuardPath(userId) {
+      return /databases/$(database)/documents/CommentSubmissionGuards/$(userId);
+    }
+
+    function canSubmitReport(reportId) {
+      let userId = request.resource.data.userId;
+      let beforeGuard = get(reportGuardPath(userId));
+      let afterGuard = getAfter(reportGuardPath(userId));
+      return isOwner(userId)
+        && request.resource.data.sender_id == userId
+        && afterGuard.data.userId == userId
+        && afterGuard.data.lastReportId == reportId
+        && validTimestamp(afterGuard.data.lastSubmittedAt)
+        && validTimestamp(afterGuard.data.updatedAt)
+        && (
+          !beforeGuard.exists()
+          || request.time > beforeGuard.data.lastSubmittedAt + duration.value(60, 's')
+        );
+    }
+
+    function canSubmitComment(reportId, commentId) {
+      let userId = request.resource.data.userId;
+      let beforeGuard = get(commentGuardPath(userId));
+      let afterGuard = getAfter(commentGuardPath(userId));
+      return afterGuard.data.userId == userId
+        && afterGuard.data.reportId == reportId
+        && afterGuard.data.lastCommentId == commentId
+        && validTimestamp(afterGuard.data.lastSubmittedAt)
+        && validTimestamp(afterGuard.data.updatedAt)
+        && (
+          !beforeGuard.exists()
+          || request.time > beforeGuard.data.lastSubmittedAt + duration.value(20, 's')
+        );
     }
 
     match /Reports/{reportId} {
       allow read: if signedIn();
       allow create: if signedIn()
         && request.resource.data.userId == request.auth.uid
-        && validHazardReport();
-      allow update: if signedIn()
+        && validHazardReport()
+        && canSubmitReport(reportId);
+      allow update: if isAdmin()
         && (
-          (
-            resource.data.userId == request.auth.uid
-            && request.resource.data.diff(resource.data).changedKeys().hasOnly([
-              'description',
-              'imageUrl',
-              'image_url',
-              'updatedAt'
-            ])
-          )
-          || request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          request.resource.data.diff(resource.data).changedKeys().hasOnly([
             'likeCount',
             'commentCount',
             'viewCount',
@@ -61,41 +175,54 @@ service cloud.firestore {
             'updatedAt'
           ])
         );
-      allow delete: if false;
+      allow delete: if isAdmin();
 
       match /likes/{userId} {
         allow read: if signedIn();
-        allow create, delete: if signedIn() && request.auth.uid == userId;
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+          && request.resource.data.userId == userId
+          && validTimestamp(request.resource.data.createdAt);
+        allow delete: if isOwner(userId);
         allow update: if false;
       }
 
       match /comments/{commentId} {
         allow read: if signedIn();
-        allow create: if signedIn()
-          && request.resource.data.userId == request.auth.uid
-          && request.resource.data.body is string
-          && request.resource.data.body.size() >= 2
-          && request.resource.data.body.size() <= 400;
-        allow update, delete: if false;
+        allow create: if isOwner(request.resource.data.userId)
+          && request.resource.data.keys().hasOnly(['userId', 'userName', 'userPhotoUrl', 'body', 'createdAt'])
+          && isCleanText(request.resource.data.userName, 1, 60)
+          && isCleanText(request.resource.data.body, 2, 400)
+          && validTimestamp(request.resource.data.createdAt)
+          && canSubmitComment(reportId, commentId);
+        allow update: if false;
+        allow delete: if isAdmin() || isOwner(resource.data.userId);
       }
 
       match /userViews/{userId} {
         allow read: if signedIn() && request.auth.uid == userId;
-        allow create: if signedIn() && request.auth.uid == userId;
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+          && request.resource.data.userId == userId
+          && validTimestamp(request.resource.data.createdAt);
         allow update, delete: if false;
       }
 
       match /userReports/{userId} {
         allow read: if signedIn() && request.auth.uid == userId;
-        allow create: if signedIn()
-          && request.auth.uid == userId
+        allow create: if isOwner(userId)
+          && request.resource.data.keys().hasOnly(['userId', 'category', 'note', 'createdAt'])
+          && request.resource.data.userId == userId
           && request.resource.data.category in [
             'false_report',
             'inaccurate_image',
             'misleading_information',
             'spam',
             'other'
-          ];
+          ]
+          && request.resource.data.note is string
+          && request.resource.data.note.size() <= 240
+          && validTimestamp(request.resource.data.createdAt);
         allow update, delete: if false;
       }
     }
@@ -106,18 +233,15 @@ service cloud.firestore {
           resource.data.audience == 'all'
           || resource.data.recipientId == request.auth.uid
         );
-      allow create: if signedIn()
-        && (
-          request.resource.data.audience == 'all'
-          || request.resource.data.recipientId == request.auth.uid
-        );
-      allow update, delete: if false;
+      allow write: if isAdmin();
     }
 
     match /NotificationReads/{readId} {
       allow read: if signedIn() && resource.data.userId == request.auth.uid;
       allow create, update: if signedIn()
-        && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.keys().hasOnly(['userId', 'notificationId', 'readAt'])
+        && request.resource.data.userId == request.auth.uid
+        && validTimestamp(request.resource.data.readAt);
       allow delete: if false;
     }
 
@@ -125,14 +249,25 @@ service cloud.firestore {
       allow read: if signedIn() && request.auth.uid == userId;
       allow create, update: if signedIn()
         && request.auth.uid == userId
-        && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.keys().hasOnly(['lastReportId', 'lastSubmittedAt', 'updatedAt', 'userId'])
+        && request.resource.data.userId == request.auth.uid
+        && validTimestamp(request.resource.data.lastSubmittedAt)
+        && validTimestamp(request.resource.data.updatedAt);
+      allow delete: if false;
+    }
+
+    match /CommentSubmissionGuards/{guardId} {
+      allow read: if signedIn() && resource.data.userId == request.auth.uid;
+      allow create, update: if signedIn()
+        && request.resource.data.keys().hasOnly(['lastCommentId', 'lastSubmittedAt', 'reportId', 'updatedAt', 'userId'])
+        && request.resource.data.userId == request.auth.uid
+        && validTimestamp(request.resource.data.lastSubmittedAt)
+        && validTimestamp(request.resource.data.updatedAt);
       allow delete: if false;
     }
 
     match /ModerationLogs/{logId} {
-      allow read: if signedIn();
-      allow create: if signedIn();
-      allow update, delete: if false;
+      allow read, write: if isAdmin();
     }
 
     match /DashboardData/{docId} {
@@ -160,7 +295,10 @@ service cloud.firestore {
           'profile_photo_url',
           'profilePhotoMedia',
           'updated_at'
-        ]);
+        ])
+        && validCloudinaryUrl(request.resource.data.photoURL)
+        && validCloudinaryUrl(request.resource.data.profilePhotoUrl)
+        && validCloudinaryUrl(request.resource.data.profile_photo_url);
       allow create: if false;
     }
   }

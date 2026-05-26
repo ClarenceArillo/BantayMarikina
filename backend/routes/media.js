@@ -3,12 +3,21 @@ const express = require('express');
 const axios = require('axios');
 const https = require('https');
 const { admin, db } = require('../firebase');
+const { createRateLimiter } = require('../middleware/security');
 
 const router = express.Router();
 
 const ALLOWED_FOLDERS = new Set(['reports/images', 'reports/videos', 'profiles']);
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 80 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'video/mp4',
+  'video/quicktime',
+]);
 const cloudinaryHttp = axios.create({
   httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 20 }),
   timeout: 20_000,
@@ -119,19 +128,49 @@ function validateUploadRequest({ bytes, folder, resourceType }) {
   }
 }
 
+function validateMimeType(mimeType, resourceType) {
+  if (!mimeType) return;
+  if (!ALLOWED_MIME_TYPES.has(String(mimeType).toLowerCase())) {
+    throw new Error('Unsupported media type.');
+  }
+  if (resourceType === 'image' && !String(mimeType).startsWith('image/')) {
+    throw new Error('This upload only accepts images.');
+  }
+  if (resourceType === 'video' && !String(mimeType).startsWith('video/')) {
+    throw new Error('This upload only accepts videos.');
+  }
+}
+
+function ownsCloudinaryAsset(publicId, uid) {
+  return [...ALLOWED_FOLDERS].some((folder) => publicId.startsWith(`${folder}/${uid}/`));
+}
+
+function isCloudinaryUrl(value, cloudName) {
+  try {
+    const parsed = new URL(String(value || ''));
+    return parsed.protocol === 'https:' && parsed.hostname === 'res.cloudinary.com' && parsed.pathname.startsWith(`/${cloudName}/`);
+  } catch {
+    return false;
+  }
+}
+
 router.get('/cloudinary/status', requireAuthenticatedUser, (req, res) => {
   const config = parseCloudinaryUrl();
 
   return res.json({
     connected: Boolean(config?.apiKey && config?.apiSecret && config.apiSecret !== 'your_cloudinary_api_secret' && config?.cloudName),
     cloudName: config?.cloudName || null,
-    apiKey: config?.apiKey || null,
+    hasApiKey: Boolean(config?.apiKey),
     hasApiSecret: Boolean(config?.apiSecret && config.apiSecret !== 'your_cloudinary_api_secret'),
     uploadFolders: [...ALLOWED_FOLDERS],
   });
 });
 
-router.post('/cloudinary/sign-upload', requireAuthenticatedUser, async (req, res) => {
+router.post('/cloudinary/sign-upload', requireAuthenticatedUser, createRateLimiter({
+  keyPrefix: 'cloudinary-sign',
+  limit: 20,
+  windowMs: 60_000,
+}), async (req, res) => {
   try {
     const { apiKey, apiSecret, cloudName } = getCloudinaryConfig();
     const folder = String(req.body.folder || '');
@@ -142,9 +181,11 @@ router.post('/cloudinary/sign-upload', requireAuthenticatedUser, async (req, res
       folder,
       resourceType,
     });
+    validateMimeType(req.body.mimeType, resourceType);
 
     const timestamp = Math.floor(Date.now() / 1000);
-    const publicId = `${req.auth.uid}/${timestamp}`;
+    const nonce = crypto.randomBytes(8).toString('hex');
+    const publicId = `${req.auth.uid}/${timestamp}-${nonce}`;
     const tags = ['bantay-marikina', req.auth.uid].join(',');
     const context = `user_id=${req.auth.uid}`;
     const paramsToSign = {
@@ -170,18 +211,22 @@ router.post('/cloudinary/sign-upload', requireAuthenticatedUser, async (req, res
       uploadUrl: `https://api.cloudinary.com/v1_1/${cloudName}/${resourceType}/upload`,
     });
   } catch (error) {
-    return res.status(400).json({ error: error.message || 'Unable to prepare upload.' });
+    const isConfigError = /configured/i.test(error.message || '');
+    return res.status(isConfigError ? 503 : 400).json({ error: isConfigError ? 'Media uploads are temporarily unavailable.' : error.message || 'Unable to prepare upload.' });
   }
 });
 
-router.post('/cloudinary/delete', requireAuthenticatedUser, async (req, res) => {
+router.post('/cloudinary/delete', requireAuthenticatedUser, createRateLimiter({
+  keyPrefix: 'cloudinary-delete',
+  limit: 30,
+  windowMs: 60_000,
+}), async (req, res) => {
   try {
     const { apiKey, apiSecret, cloudName } = getCloudinaryConfig();
     const publicId = String(req.body.publicId || '');
     const resourceType = String(req.body.resourceType || 'image');
 
-    const ownsAssetPath = [...ALLOWED_FOLDERS].some((folder) => publicId.startsWith(`${folder}/${req.auth.uid}/`));
-    if (!publicId || !ownsAssetPath) {
+    if (!publicId || !ownsCloudinaryAsset(publicId, req.auth.uid)) {
       return res.status(400).json({ error: 'Unsupported media asset.' });
     }
 
@@ -205,11 +250,22 @@ router.post('/cloudinary/delete', requireAuthenticatedUser, async (req, res) => 
   }
 });
 
-router.post('/cloudinary/profile-photo', requireAuthenticatedUser, async (req, res) => {
+router.post('/cloudinary/profile-photo', requireAuthenticatedUser, createRateLimiter({
+  keyPrefix: 'profile-photo',
+  limit: 12,
+  windowMs: 60_000,
+}), async (req, res) => {
   try {
+    const { cloudName } = getCloudinaryConfig();
     const { media } = req.body;
     if (!media?.secure_url || !media?.public_id) {
       return res.status(400).json({ error: 'Cloudinary media metadata is required.' });
+    }
+    if (!ownsCloudinaryAsset(String(media.public_id), req.auth.uid) || !String(media.public_id).startsWith(`profiles/${req.auth.uid}/`)) {
+      return res.status(403).json({ error: 'You can only attach your own profile media.' });
+    }
+    if (!isCloudinaryUrl(media.secure_url, cloudName)) {
+      return res.status(400).json({ error: 'Unsupported profile media URL.' });
     }
 
     const userRef = db.collection('Users').doc(req.auth.uid);
@@ -230,7 +286,11 @@ router.post('/cloudinary/profile-photo', requireAuthenticatedUser, async (req, r
   }
 });
 
-router.delete('/cloudinary/profile-photo', requireAuthenticatedUser, async (req, res) => {
+router.delete('/cloudinary/profile-photo', requireAuthenticatedUser, createRateLimiter({
+  keyPrefix: 'profile-photo-delete',
+  limit: 12,
+  windowMs: 60_000,
+}), async (req, res) => {
   try {
     const userRef = db.collection('Users').doc(req.auth.uid);
     const userDoc = await userRef.get();

@@ -1,4 +1,5 @@
 const { admin, db } = require('../firebase');
+const { sanitizeText } = require('../middleware/security');
 
 const NOTIFICATIONS_COLLECTION = 'Notifications';
 const OFFICIAL_ALERT_TYPES = new Set(['Earthquake', 'Typhoon', 'Extreme Heat', 'High Water Level', 'Flood']);
@@ -16,10 +17,10 @@ function slugify(value) {
 function normalizeOfficialAlert(input = {}) {
   const hazardType = OFFICIAL_ALERT_TYPES.has(input.hazardType) ? input.hazardType : 'High Water Level';
   const severity = SEVERITIES.has(input.severity) ? input.severity : 'High';
-  const title = String(input.title || `${hazardType} Alert in Marikina`).trim();
-  const body = String(input.body || input.description || '').trim();
-  const safetyTip = String(input.safetyTip || '').trim();
-  const affectedArea = String(input.affectedArea || input.barangay || 'Marikina City').trim();
+  const title = sanitizeText(input.title || `${hazardType} Alert in Marikina`, 120);
+  const body = sanitizeText(input.body || input.description || '', 500);
+  const safetyTip = sanitizeText(input.safetyTip || '', 240);
+  const affectedArea = sanitizeText(input.affectedArea || input.barangay || 'Marikina City', 120);
 
   if (!body || body.length < 12) {
     throw new Error('Official alert body must be at least 12 characters.');
@@ -37,7 +38,7 @@ function normalizeOfficialAlert(input = {}) {
     audience: 'all',
     type: 'official_alert',
     source: 'official',
-    sourceLabel: input.sourceLabel || 'OFFICIAL ALERT',
+    sourceLabel: sanitizeText(input.sourceLabel || 'OFFICIAL ALERT', 40),
     priority: severity === 'Critical' ? 'critical' : 'high',
     hazardType,
     severity,
@@ -50,11 +51,11 @@ function normalizeOfficialAlert(input = {}) {
     longitude: Number.isFinite(Number(input.longitude)) ? Number(input.longitude) : null,
     createdBy: input.createdBy || 'system',
     createdByRole: input.createdByRole || 'admin',
-    provider: input.provider || 'BantayMarikina Admin',
-    providerReference: input.providerReference || null,
-    officialAlertKey: input.officialAlertKey || null,
-    officialEventId: input.officialEventId || input.providerReference || null,
-    sourceUrl: input.sourceUrl || null,
+    provider: sanitizeText(input.provider || 'BantayMarikina Admin', 80),
+    providerReference: input.providerReference ? sanitizeText(input.providerReference, 120) : null,
+    officialAlertKey: input.officialAlertKey ? sanitizeText(input.officialAlertKey, 80) : null,
+    officialEventId: input.officialEventId ? sanitizeText(input.officialEventId, 120) : input.providerReference ? sanitizeText(input.providerReference, 120) : null,
+    sourceUrl: input.sourceUrl ? String(input.sourceUrl).trim().slice(0, 500) : null,
     createdAt: issuedAt || admin.firestore.FieldValue.serverTimestamp(),
     issuedAt: issuedAt || null,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),

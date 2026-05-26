@@ -7,17 +7,13 @@ import { BottomNav } from '@/components/BottomNav';
 import { AuthSessionProvider } from '@/context/auth-context';
 import { SignupProvider } from '@/context/signup-context';
 import { preloadIconAssets } from '@/constants/icons';
+import {
+  getMainTabAnimation,
+  getMainTabFromPath,
+  getMainTabFromRouteName,
+  getMainTabReplaceAnimation,
+} from '@/services/mainTabNavigation';
 import { AppThemeProvider, useTheme } from '@/theme/ThemeProvider';
-
-type MainTab = 'home' | 'map' | 'report' | 'notification' | 'profile';
-
-function getActiveTab(pathname: string): MainTab | null {
-  const route = pathname.replace(/^\//, '').split('/')[0];
-  if (route === 'home' || route === 'map' || route === 'report' || route === 'notification' || route === 'profile') {
-    return route;
-  }
-  return null;
-}
 
 export default function RootLayout() {
   return (
@@ -33,7 +29,7 @@ export default function RootLayout() {
 
 function ThemedStack() {
   const { colors, isDark } = useTheme();
-  const activeTab = getActiveTab(usePathname());
+  const activeTab = getMainTabFromPath(usePathname());
 
   useEffect(() => {
     Asset.loadAsync(preloadIconAssets).catch(() => undefined);
@@ -42,9 +38,15 @@ function ThemedStack() {
   return (
     <>
       <Stack
-        screenOptions={{
-          contentStyle: { backgroundColor: colors.background },
-          headerShown: false,
+        screenOptions={({ route }) => {
+          const isMainTab = Boolean(getMainTabFromRouteName(route.name));
+
+          return {
+            animation: isMainTab ? getMainTabAnimation() : 'default',
+            animationTypeForReplace: isMainTab ? getMainTabReplaceAnimation() : 'push',
+            contentStyle: { backgroundColor: colors.background },
+            headerShown: false,
+          };
         }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="home" />

@@ -180,15 +180,16 @@ export async function uploadToCloudinary({
   const bytes = mediaSizeBytes && Number.isFinite(mediaSizeBytes) && mediaSizeBytes > 0
     ? mediaSizeBytes
     : await getLocalAssetSize(mediaUri);
+  const resolvedMimeType = getMimeType(mediaUri, resourceType, mimeType);
   const signature = await requestWithAuth<SignUploadResponse>('/media/cloudinary/sign-upload', idToken, {
     method: 'POST',
-    body: JSON.stringify({ bytes, folder, resourceType }),
+    body: JSON.stringify({ bytes, folder, mimeType: resolvedMimeType, resourceType }),
   });
 
   const formData = new FormData();
   formData.append('file', {
     name: getFileName(mediaUri, resourceType),
-    type: getMimeType(mediaUri, resourceType, mimeType),
+    type: resolvedMimeType,
     uri: mediaUri,
   } as unknown as Blob);
   formData.append('api_key', signature.apiKey);

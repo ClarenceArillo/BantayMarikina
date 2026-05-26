@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { admin, db } = require('../firebase');
 const { createOfficialHazardAlert } = require('../services/officialAlerts');
+const { createRateLimiter } = require('../middleware/security');
 
 async function requireAuthenticatedUser(req, res, next) {
   try {
@@ -41,7 +42,11 @@ async function requireOfficialAccess(req, res, next) {
   });
 }
 
-router.post('/official', requireOfficialAccess, async (req, res) => {
+router.post('/official', requireOfficialAccess, createRateLimiter({
+  keyPrefix: 'official-alert',
+  limit: 20,
+  windowMs: 60_000,
+}), async (req, res) => {
   try {
     const alert = await createOfficialHazardAlert({
       ...req.body,
@@ -51,7 +56,7 @@ router.post('/official', requireOfficialAccess, async (req, res) => {
 
     return res.status(201).json({ alert });
   } catch (error) {
-    return res.status(400).json({ error: error.message });
+    return res.status(400).json({ error: error.message || 'Unable to create official alert.' });
   }
 });
 

@@ -26,7 +26,7 @@ import {
   UserProfileResponse,
   updateCurrentUserProfile,
 } from '@/services/authService';
-import { ensureFirebaseSession } from '@/services/firebaseSession';
+import { clearFirebaseSessionState, ensureFirebaseSession } from '@/services/firebaseSession';
 import { removeUserProfilePhoto, uploadUserProfilePhoto } from '@/services/profilePhotoService';
 
 const logo = require('@/assets/Logo/BantayMarikinaLogo.png');
@@ -324,6 +324,7 @@ export default function ProfileScreen() {
             await AsyncStorage.removeItem(`bantay.profile.photo.${session.uid}`).catch(() => undefined);
           }
           setProfilePhotoUri('');
+          clearFirebaseSessionState();
           setSession(null);
           router.replace('/' as never);
         },

@@ -1,4 +1,3 @@
-import { router } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
@@ -10,6 +9,7 @@ import { Icons } from '@/constants/icons';
 import { useAuthSession } from '@/context/auth-context';
 import { useNotifications } from '@/hooks/useNotifications';
 import { markNotificationRead } from '@/services/hazardReportService';
+import { navigateMainTab } from '@/services/mainTabNavigation';
 import type { ReportFilters, ReportNotification } from '@/types/hazard';
 
 function dateBucket(date: Date | null) {
@@ -88,7 +88,7 @@ export default function NotificationScreen() {
 
   const viewOnMap = useCallback((notification: ReportNotification) => {
     markReadOnce(notification);
-    router.replace('/map' as never);
+    navigateMainTab('notification', 'map');
   }, [markReadOnce]);
 
   const renderItem = useCallback(({ item }: { item: (typeof listItems)[number] }) => {

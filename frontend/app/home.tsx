@@ -21,6 +21,7 @@ import { SafetyTipsModal } from '@/components/SafetyTipsModal';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuthSession } from '@/context/auth-context';
 import { useHazardReports } from '@/hooks/useHazardReports';
+import { navigateMainTab } from '@/services/mainTabNavigation';
 import { useTheme } from '@/theme/useTheme';
 import {
   getDashboardSnapshot,
@@ -161,8 +162,8 @@ export default function HomeDashboard() {
   const { reports: hazardReports, isLoading: isMapLoading, error: mapError } = useHazardReports(session?.idToken, 150);
 
   const displayName = useMemo(() => getFirstName(fullName), [fullName]);
-  const openMap = useCallback(() => router.push('/map' as never), []);
-  const openEvacuationMap = useCallback(() => router.push({ pathname: '/map', params: { evacuation: '1' } } as never), []);
+  const openMap = useCallback(() => navigateMainTab('home', 'map'), []);
+  const openEvacuationMap = useCallback(() => navigateMainTab('home', 'map', { evacuation: '1' }), []);
   const openHotlines = useCallback(() => router.push('/hotline' as never), []);
   const emergencyLevel = useMemo(() => {
     if ((waterLevel?.stations ?? []).some((station) => station.status === 'Critical')) return 'Critical';

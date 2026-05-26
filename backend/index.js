@@ -8,6 +8,7 @@ const {
   warmDashboardCache,
 } = require('./services/dashboardCache');
 const { startOfficialAlertPolling, stopOfficialAlertPolling } = require('./services/officialAlertPoller');
+const { createRateLimiter } = require('./middleware/security');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -45,9 +46,14 @@ process.on('uncaughtException', (error) => {
   });
 });
 
-app.use(cors());
+app.set('trust proxy', 1);
+app.use(cors({
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()) : true,
+  credentials: false,
+}));
 app.disable('x-powered-by');
 app.use(express.json({ limit: '1mb' }));
+app.use(createRateLimiter({ keyPrefix: 'api', limit: 240, windowMs: 60_000 }));
 app.use((req, res, next) => {
   req.setTimeout(30_000);
   res.setTimeout(35_000);

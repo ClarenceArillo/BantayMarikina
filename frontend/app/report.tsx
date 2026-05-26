@@ -24,6 +24,7 @@ import { useHazardReports } from '@/hooks/useHazardReports';
 import { useLiveLocation } from '@/hooks/useLiveLocation';
 import { ensureFirebaseSession } from '@/services/firebaseSession';
 import { submitHazardReport } from '@/services/hazardReportService';
+import { navigateMainTab } from '@/services/mainTabNavigation';
 import { HAZARD_TYPES, SEVERITY_LEVELS, type HazardReport, type HazardSeverity, type HazardType, type ReportFilters } from '@/types/hazard';
 
 const iconSources = {
@@ -120,7 +121,7 @@ export default function ReportScreen() {
       });
 
       Alert.alert('Report Submitted', 'Your hazard report is now visible on the live map.', [{ text: 'Done' }]);
-      router.replace('/map' as never);
+      navigateMainTab('report', 'map');
     } catch (submitError) {
       Alert.alert('Report Failed', submitError instanceof Error ? submitError.message : 'Please try again.', [{ text: 'Try Again' }]);
     } finally {
