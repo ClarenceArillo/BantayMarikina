@@ -2,13 +2,42 @@ const express = require('express');
 const router = express.Router();
 const { db, admin } = require('../firebase');
 const axios = require('axios');
+const https = require('https');
+const { createRateLimiter, sanitizeText, validateEmail } = require('../middleware/security');
+
+const firebaseAuthHttp = axios.create({
+  httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 20 }),
+  timeout: 15_000,
+});
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function postFirebaseAuth(url, body) {
+  let lastError;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await firebaseAuthHttp.post(url, body);
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      if (!RETRYABLE_STATUS.has(status) || attempt === 2) break;
+      await sleep(500 * (attempt + 1));
+    }
+  }
+
+  throw lastError;
+}
 
 function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
 function normalizeUsername(username) {
-  return String(username || '').trim();
+  return sanitizeText(username, 24);
 }
 
 function normalizeUsernameKey(username) {
@@ -130,6 +159,19 @@ function buildProfileResponse(uid, userData) {
   };
 }
 
+const authAttemptLimiter = createRateLimiter({
+  keyPrefix: 'auth-attempt',
+  limit: 12,
+  windowMs: 15 * 60_000,
+  message: 'Too many authentication attempts. Please wait before trying again.',
+});
+
+const profileUpdateLimiter = createRateLimiter({
+  keyPrefix: 'profile-update',
+  limit: 30,
+  windowMs: 60_000,
+});
+
 async function findUserByUsername(username) {
   const usernameLower = normalizeUsernameKey(username);
 
@@ -195,7 +237,7 @@ router.post('/firebase-token', requireAuthenticatedUser, async (req, res) => {
   }
 });
 
-router.patch('/me', requireAuthenticatedUser, async (req, res) => {
+router.patch('/me', requireAuthenticatedUser, profileUpdateLimiter, async (req, res) => {
   try {
     const {
       first_name, middle_name, last_name, suffix,
@@ -204,16 +246,19 @@ router.patch('/me', requireAuthenticatedUser, async (req, res) => {
     } = req.body;
 
     const cleanEmail = normalizeEmail(email);
-    const cleanFirstName = String(first_name || '').trim();
-    const cleanMiddleName = String(middle_name || '').trim();
-    const cleanLastName = String(last_name || '').trim();
-    const cleanSuffix = String(suffix || '').trim();
+    const cleanFirstName = sanitizeText(first_name, 60);
+    const cleanMiddleName = sanitizeText(middle_name, 60);
+    const cleanLastName = sanitizeText(last_name, 60);
+    const cleanSuffix = sanitizeText(suffix, 20);
     const fullName = [cleanFirstName, cleanMiddleName, cleanLastName, cleanSuffix]
       .filter(Boolean)
       .join(' ');
 
     if (!cleanFirstName || !cleanLastName || !cleanEmail) {
       return res.status(400).json({ error: 'First name, last name, and email are required' });
+    }
+    if (!validateEmail(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
     }
 
     const userRef = db.collection('Users').doc(req.auth.uid);
@@ -228,13 +273,13 @@ router.patch('/me', requireAuthenticatedUser, async (req, res) => {
       middle_name: cleanMiddleName,
       last_name: cleanLastName,
       suffix: cleanSuffix,
-      gender: String(gender || '').trim(),
-      contact_number: String(contact_number || '').trim(),
+      gender: sanitizeText(gender, 40),
+      contact_number: sanitizeText(contact_number, 32),
       email: cleanEmail,
       email_lower: cleanEmail,
-      barangay: String(barangay || '').trim(),
-      street_block: String(street_block || '').trim(),
-      house_number: String(house_number || '').trim(),
+      barangay: sanitizeText(barangay, 80),
+      street_block: sanitizeText(street_block, 120),
+      house_number: sanitizeText(house_number, 40),
       name: {
         first: cleanFirstName,
         middle: cleanMiddleName,
@@ -243,9 +288,9 @@ router.patch('/me', requireAuthenticatedUser, async (req, res) => {
         full: fullName,
       },
       address: {
-        barangay: String(barangay || '').trim(),
-        street_block: String(street_block || '').trim(),
-        house_number: String(house_number || '').trim(),
+        barangay: sanitizeText(barangay, 80),
+        street_block: sanitizeText(street_block, 120),
+        house_number: sanitizeText(house_number, 40),
       },
       updated_at: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -258,8 +303,91 @@ router.patch('/me', requireAuthenticatedUser, async (req, res) => {
   }
 });
 
+router.patch('/me/username', requireAuthenticatedUser, profileUpdateLimiter, async (req, res) => {
+  try {
+    const cleanUsername = normalizeUsername(req.body.username);
+    const usernameLower = normalizeUsernameKey(cleanUsername);
+
+    if (!/^[a-zA-Z0-9._-]{3,24}$/.test(cleanUsername)) {
+      return res.status(400).json({ error: 'Username must be 3-24 letters, numbers, dots, dashes, or underscores.' });
+    }
+
+    const existing = await db.collection('Users')
+      .where('username_lower', '==', usernameLower)
+      .limit(1)
+      .get();
+
+    if (!existing.empty && existing.docs[0].id !== req.auth.uid) {
+      return res.status(400).json({ error: 'Username already taken' });
+    }
+
+    const userRef = db.collection('Users').doc(req.auth.uid);
+    await userRef.update({
+      username: cleanUsername,
+      username_lower: usernameLower,
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const userDoc = await userRef.get();
+    return res.json(buildProfileResponse(req.auth.uid, userDoc.data()));
+  } catch (error) {
+    logAuthError('Update username', error);
+    return res.status(500).json({ error: 'Unable to update username' });
+  }
+});
+
+router.patch('/me/password', requireAuthenticatedUser, authAttemptLimiter, async (req, res) => {
+  try {
+    const currentPassword = String(req.body.current_password || '');
+    const newPassword = String(req.body.new_password || '');
+    const confirmPassword = String(req.body.confirm_password || '');
+    const user = await admin.auth().getUser(req.auth.uid);
+    const firebaseApiKey = getFirebaseApiKey();
+
+    if (!firebaseApiKey) {
+      return res.status(500).json({ error: 'FIREBASE_WEB_API_KEY is required for password changes' });
+    }
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({ error: 'Current password, new password, and confirmation are required.' });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'New passwords do not match.' });
+    }
+
+    if (newPassword.length < 8 || !/[A-Z]/.test(newPassword) || !/[a-z]/.test(newPassword) || !/[0-9]/.test(newPassword)) {
+      return res.status(400).json({ error: 'Use at least 8 characters with uppercase, lowercase, and a number.' });
+    }
+
+    await postFirebaseAuth(
+      `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
+      {
+        email: user.email,
+        password: currentPassword,
+        returnSecureToken: true,
+      }
+    );
+
+    await admin.auth().updateUser(req.auth.uid, { password: newPassword });
+    await db.collection('Users').doc(req.auth.uid).update({
+      password_updated_at: admin.firestore.FieldValue.serverTimestamp(),
+      updated_at: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    return res.json({ message: 'Password updated successfully' });
+  } catch (error) {
+    logAuthError('Update password', error);
+    const firebaseMessage = error.response?.data?.error?.message;
+    if (firebaseMessage === 'INVALID_PASSWORD' || firebaseMessage === 'INVALID_LOGIN_CREDENTIALS') {
+      return res.status(401).json({ error: 'Current password is incorrect.' });
+    }
+    return res.status(500).json({ error: getAuthErrorMessage(error) || 'Unable to update password' });
+  }
+});
+
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', authAttemptLimiter, async (req, res) => {
   try {
     const {
       first_name, middle_name, last_name, suffix,
@@ -271,18 +399,30 @@ router.post('/register', async (req, res) => {
     const cleanEmail = normalizeEmail(email);
     const cleanUsername = normalizeUsername(username);
     const usernameLower = normalizeUsernameKey(cleanUsername);
-    const fullName = [first_name, middle_name, last_name, suffix]
-      .map((part) => String(part || '').trim())
+    const cleanFirstName = sanitizeText(first_name, 60);
+    const cleanMiddleName = sanitizeText(middle_name, 60);
+    const cleanLastName = sanitizeText(last_name, 60);
+    const cleanSuffix = sanitizeText(suffix, 20);
+    const fullName = [cleanFirstName, cleanMiddleName, cleanLastName, cleanSuffix]
       .filter(Boolean)
       .join(' ');
 
-    if (!first_name || !last_name || !cleanEmail || !cleanUsername || !password || !confirm_password) {
+    if (!cleanFirstName || !cleanLastName || !cleanEmail || !cleanUsername || !password || !confirm_password) {
       return res.status(400).json({ error: 'Please complete all required fields' });
+    }
+    if (!validateEmail(cleanEmail)) {
+      return res.status(400).json({ error: 'Please enter a valid email address' });
+    }
+    if (!/^[a-zA-Z0-9._-]{3,24}$/.test(cleanUsername)) {
+      return res.status(400).json({ error: 'Username must be 3-24 letters, numbers, dots, dashes, or underscores.' });
     }
 
     // Check if passwords match
     if (password !== confirm_password) {
       return res.status(400).json({ error: 'Passwords do not match' });
+    }
+    if (password.length < 8 || !/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+      return res.status(400).json({ error: 'Use at least 8 characters with uppercase, lowercase, and a number.' });
     }
 
     // Check if username already exists
@@ -304,30 +444,30 @@ router.post('/register', async (req, res) => {
     try {
       // Save profile data only. Passwords stay in Firebase Auth.
       await db.collection('Users').doc(userRecord.uid).set({
-        first_name: String(first_name || '').trim(),
-        middle_name: String(middle_name || '').trim(),
-        last_name: String(last_name || '').trim(),
-        suffix: String(suffix || '').trim(),
-        gender: String(gender || '').trim(),
-        contact_number: String(contact_number || '').trim(),
+        first_name: cleanFirstName,
+        middle_name: cleanMiddleName,
+        last_name: cleanLastName,
+        suffix: cleanSuffix,
+        gender: sanitizeText(gender, 40),
+        contact_number: sanitizeText(contact_number, 32),
         email: cleanEmail,
         email_lower: cleanEmail,
-        barangay: String(barangay || '').trim(),
-        street_block: String(street_block || '').trim(),
-        house_number: String(house_number || '').trim(),
+        barangay: sanitizeText(barangay, 80),
+        street_block: sanitizeText(street_block, 120),
+        house_number: sanitizeText(house_number, 40),
         username: cleanUsername,
         username_lower: usernameLower,
         name: {
-          first: String(first_name || '').trim(),
-          middle: String(middle_name || '').trim(),
-          last: String(last_name || '').trim(),
-          suffix: String(suffix || '').trim(),
+          first: cleanFirstName,
+          middle: cleanMiddleName,
+          last: cleanLastName,
+          suffix: cleanSuffix,
           full: fullName,
         },
         address: {
-          barangay: String(barangay || '').trim(),
-          street_block: String(street_block || '').trim(),
-          house_number: String(house_number || '').trim(),
+          barangay: sanitizeText(barangay, 80),
+          street_block: sanitizeText(street_block, 120),
+          house_number: sanitizeText(house_number, 40),
         },
         role: 'resident',
         created_at: admin.firestore.FieldValue.serverTimestamp(),
@@ -352,7 +492,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login with email/username + password
-router.post('/login', async (req, res) => {
+router.post('/login', authAttemptLimiter, async (req, res) => {
   try {
     const { email, identifier, username, password } = req.body;
     const loginIdentifier = identifier || email || username;
@@ -369,7 +509,7 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ error: 'Email or username and password are required' });
     }
 
-    const authResponse = await axios.post(
+    const authResponse = await postFirebaseAuth(
       `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${firebaseApiKey}`,
       {
         email: cleanEmail,
@@ -436,7 +576,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Send Firebase Auth password reset email
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', authAttemptLimiter, async (req, res) => {
   try {
     const cleanEmail = normalizeEmail(req.body.email);
     const firebaseApiKey = getFirebaseApiKey();
@@ -451,7 +591,7 @@ router.post('/forgot-password', async (req, res) => {
       return res.status(400).json({ error: 'Email is required' });
     }
 
-    await axios.post(
+    await postFirebaseAuth(
       `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${firebaseApiKey}`,
       {
         requestType: 'PASSWORD_RESET',
@@ -463,15 +603,6 @@ router.post('/forgot-password', async (req, res) => {
   } catch (error) {
     const status = error.response?.status === 400 ? 404 : 500;
     res.status(status).json({ error: getAuthErrorMessage(error) });
-  }
-});
-
-router.post('/firebase-token', requireAuthenticatedUser, async (req, res) => {
-  try {
-    const customToken = await admin.auth().createCustomToken(req.auth.uid);
-    res.json({ customToken });
-  } catch (error) {
-    res.status(500).json({ error: 'Unable to create Firebase session token' });
   }
 });
 

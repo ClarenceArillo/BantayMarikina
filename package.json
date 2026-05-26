@@ -4,12 +4,15 @@
     "remote:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/stop-remote.ps1",
     "backend:start": "npm --prefix backend run start",
     "backend:tunnel": "npm --prefix backend run tunnel",
+    "firebase:indexes": "firebase deploy --only firestore:indexes",
+    "firebase:rules": "firebase deploy --only firestore:rules",
     "frontend:tunnel": "npm --prefix frontend run start:tunnel"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"
   },
   "dependencies": {
+    "@expo/ngrok": "^4.1.3",
     "expo": "^49.0.23"
   }
 }

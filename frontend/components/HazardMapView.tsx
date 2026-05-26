@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Asset } from 'expo-asset';
 import {
   ActivityIndicator,
@@ -12,6 +12,7 @@ import {
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { useTheme } from '@/theme/useTheme';
+import type { EvacuationSite } from '@/types/evacuation';
 import type { HazardReport } from '@/types/hazard';
 
 const MARIKINA_CENTER = { latitude: 14.6507, longitude: 121.1029 };
@@ -26,6 +27,8 @@ type UserLocation = {
 type HazardMapViewProps = {
   reports: HazardReport[];
   pinSource: ImageSourcePropType;
+  evacuationSource?: ImageSourcePropType;
+  evacuationSites?: EvacuationSite[];
   userLocation?: UserLocation | null;
   isLoading?: boolean;
   error?: string | null;
@@ -88,7 +91,7 @@ function getImageUri(source: ImageSourcePropType) {
   return '';
 }
 
-function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isDark: boolean) {
+function buildMapHtml(pinUri: string, evacuationUri: string, initialZoom: number, compact: boolean, isDark: boolean) {
   const tileUrl = isDark
     ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
     : 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -123,6 +126,47 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
       top: 8px;
       width: 12px;
     }
+    .evacuation-pin-wrap {
+      filter: drop-shadow(0 10px 14px rgba(201,53,53,.34));
+      height: 50px;
+      position: relative;
+      width: 42px;
+    }
+    .evacuation-pin-svg {
+      display: block;
+      height: 50px;
+      width: 42px;
+    }
+    .evacuation-pin-icon {
+      background: #ffffff;
+      border-radius: 50%;
+      height: 20px;
+      left: 11px;
+      object-fit: contain;
+      padding: 2px;
+      position: absolute;
+      top: 8px;
+      width: 20px;
+    }
+    .evacuation-label {
+      background: #fff;
+      border: 1px solid rgba(201,53,53,.26);
+      border-radius: 999px;
+      box-shadow: 0 8px 18px rgba(17,24,39,.16);
+      color: #a6192e;
+      font-size: 11px;
+      font-weight: 900;
+      padding: 5px 9px;
+    }
+    .leaflet-tooltip-left.evacuation-label::before,
+    .leaflet-tooltip-right.evacuation-label::before,
+    .leaflet-tooltip-top.evacuation-label::before,
+    .leaflet-tooltip-bottom.evacuation-label::before {
+      display: none;
+    }
+    .evacuation-preview { min-width: 180px; }
+    .evacuation-preview-title { color: #a6192e; font-size: 13px; font-weight: 900; margin-bottom: 4px; }
+    .evacuation-preview-meta { font-size: 11px; font-weight: 800; opacity: .74; }
     .user-dot {
       background: #2d75b4;
       border: 3px solid #fff;
@@ -142,8 +186,12 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
     const marikina = [${MARIKINA_CENTER.latitude}, ${MARIKINA_CENTER.longitude}];
     const map = L.map('map', { zoomControl: true, preferCanvas: true }).setView(marikina, ${initialZoom});
     const cluster = L.markerClusterGroup({ chunkedLoading: true, maxClusterRadius: ${compact ? 42 : 54} });
+    const evacuationLayer = L.layerGroup();
     const pinUri = ${serializeForScript(pinUri)};
+    const evacuationUri = ${serializeForScript(evacuationUri)};
+    const evacuationLabelMinZoom = 16;
     let markersById = {};
+    let evacuationMarkers = [];
     let userMarker = null;
     let userAccuracy = null;
 
@@ -152,6 +200,7 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
     map.addLayer(cluster);
+    map.addLayer(evacuationLayer);
 
     function post(payload) {
       window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(payload));
@@ -193,6 +242,29 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
       '</div>';
     }
 
+    function evacuationIcon() {
+      return L.divIcon({
+        className: 'evacuation-pin-host',
+        html: '<div class="evacuation-pin-wrap">' +
+          '<svg class="evacuation-pin-svg" viewBox="0 0 42 50" aria-hidden="true" focusable="false">' +
+            '<path d="M21 1.5C10.5 1.5 2.5 9.4 2.5 19.7c0 13.2 18.5 28.8 18.5 28.8s18.5-15.6 18.5-28.8C39.5 9.4 31.5 1.5 21 1.5Z" fill="#c93535" stroke="#ffffff" stroke-width="3"/>' +
+            '<circle cx="21" cy="19.5" r="12" fill="#ffffff"/>' +
+          '</svg>' +
+          '<img class="evacuation-pin-icon" src="' + escapeHtml(evacuationUri) + '" onerror="this.style.display=\\'none\\';">' +
+        '</div>',
+        iconSize: [42, 50],
+        iconAnchor: [21, 48],
+        popupAnchor: [0, -46]
+      });
+    }
+
+    function evacuationPopupHtml(site) {
+      return '<div class="evacuation-preview">' +
+        '<div class="evacuation-preview-title">' + escapeHtml(site.name || 'Evacuation site') + '</div>' +
+        '<div class="evacuation-preview-meta">Evacuation center preview</div>' +
+      '</div>';
+    }
+
     function updateReports(reports) {
       cluster.clearLayers();
       markersById = {};
@@ -208,6 +280,46 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
         });
         markersById[report.id] = marker;
         cluster.addLayer(marker);
+      });
+    }
+
+    function updateEvacuations(sites) {
+      evacuationLayer.clearLayers();
+      evacuationMarkers = [];
+      (sites || []).forEach((site) => {
+        if (!isValidPoint(site)) return;
+        const marker = L.marker([site.latitude, site.longitude], {
+          icon: evacuationIcon(),
+          title: site.name,
+          zIndexOffset: 700
+        });
+        marker.bindPopup(evacuationPopupHtml(site), { closeButton: false, maxWidth: 240 });
+        evacuationMarkers.push({
+          marker,
+          label: site.name || 'Evacuation site'
+        });
+        evacuationLayer.addLayer(marker);
+      });
+      syncEvacuationLabels();
+    }
+
+    function syncEvacuationLabels() {
+      const shouldShow = map.getZoom() >= evacuationLabelMinZoom;
+      evacuationMarkers.forEach(({ marker, label }) => {
+        if (shouldShow) {
+          if (!marker.getTooltip()) {
+            marker.bindTooltip(label, {
+              className: 'evacuation-label',
+              direction: 'right',
+              offset: [18, -24],
+              permanent: false
+            });
+          }
+          marker.openTooltip();
+        } else {
+          marker.closeTooltip();
+          if (marker.getTooltip()) marker.unbindTooltip();
+        }
       });
     }
 
@@ -258,11 +370,13 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
 
     window.updateHazardMap = function(payload) {
       if (Object.prototype.hasOwnProperty.call(payload, 'reports')) updateReports(payload.reports || []);
+      if (Object.prototype.hasOwnProperty.call(payload, 'evacuationSites')) updateEvacuations(payload.evacuationSites || []);
       if (Object.prototype.hasOwnProperty.call(payload, 'userLocation')) updateUserLocation(payload.userLocation);
       if (payload.focusUser) focusUser(payload.userLocation);
     };
 
     map.on('click', () => post({ type: 'mapPress' }));
+    map.on('zoomend', syncEvacuationLabels);
     setTimeout(() => map.invalidateSize(), 250);
     post({ type: 'ready' });
   </script>
@@ -270,9 +384,11 @@ function buildMapHtml(pinUri: string, initialZoom: number, compact: boolean, isD
 </html>`;
 }
 
-export function HazardMapView({
+function HazardMapViewComponent({
   reports,
   pinSource,
+  evacuationSource,
+  evacuationSites = [],
   userLocation,
   isLoading = false,
   error,
@@ -290,7 +406,11 @@ export function HazardMapView({
   const pendingPayloadRef = useRef<object | null>(null);
   const lastFocusSignalRef = useRef(focusSignal);
   const pinUri = useMemo(() => getImageUri(pinSource), [pinSource]);
-  const html = useMemo(() => buildMapHtml(pinUri, initialZoom, compact, isDark), [compact, initialZoom, isDark, pinUri]);
+  const evacuationUri = useMemo(() => getImageUri(evacuationSource ?? pinSource), [evacuationSource, pinSource]);
+  const html = useMemo(
+    () => buildMapHtml(pinUri, evacuationUri, initialZoom, compact, isDark),
+    [compact, evacuationUri, initialZoom, isDark, pinUri]
+  );
 
   reportsRef.current = reports;
 
@@ -316,6 +436,19 @@ export function HazardMapView({
     [reports]
   );
 
+  const mapEvacuationSites = useMemo(
+    () =>
+      evacuationSites
+        .filter((site) => isValidLocation(site))
+        .map((site) => ({
+          id: site.id,
+          name: site.name,
+          latitude: site.latitude,
+          longitude: site.longitude,
+        })),
+    [evacuationSites]
+  );
+
   const safeUserLocation = useMemo(() => (isValidLocation(userLocation) ? userLocation : null), [userLocation]);
 
   const injectMapUpdate = useCallback((payload: object) => {
@@ -334,10 +467,11 @@ export function HazardMapView({
 
     injectMapUpdate({
       reports: mapReports,
+      evacuationSites: mapEvacuationSites,
       userLocation: safeUserLocation,
       focusUser: shouldFocusUser,
     });
-  }, [focusSignal, injectMapUpdate, mapReports, safeUserLocation]);
+  }, [focusSignal, injectMapUpdate, mapEvacuationSites, mapReports, safeUserLocation]);
 
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     try {
@@ -348,6 +482,7 @@ export function HazardMapView({
         injectMapUpdate(
           pendingPayloadRef.current ?? {
             reports: mapReports,
+            evacuationSites: mapEvacuationSites,
             userLocation: safeUserLocation,
           }
         );
@@ -364,7 +499,7 @@ export function HazardMapView({
     } catch {
       return;
     }
-  }, [injectMapUpdate, mapReports, onMapPress, onMarkerPress, safeUserLocation]);
+  }, [injectMapUpdate, mapEvacuationSites, mapReports, onMapPress, onMarkerPress, safeUserLocation]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.mapBackground, height }]}>
@@ -392,6 +527,8 @@ export function HazardMapView({
     </View>
   );
 }
+
+export const HazardMapView = memo(HazardMapViewComponent);
 
 const styles = StyleSheet.create({
   container: {

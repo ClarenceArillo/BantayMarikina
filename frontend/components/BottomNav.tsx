@@ -1,86 +1,80 @@
-import { router } from 'expo-router';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 
 import { useAppTheme } from '@/components/EmergencyUI';
+import { Icons } from '@/constants/icons';
+import { navigateMainTab, type MainTabRoute } from '@/services/mainTabNavigation';
 import { useTheme } from '@/theme/useTheme';
 import { Radius } from '@/constants/theme';
 
-type BottomNavTab = 'home' | 'map' | 'report' | 'notification' | 'profile';
-
 type BottomNavProps = {
-  activeTab: BottomNavTab;
+  activeTab: MainTabRoute;
 };
 
 const iconSources = {
   home: {
-    light: { inactive: require('@/assets/Icons/Home.png'), active: require('@/assets/Icons/Home (2).png') },
-    dark: { inactive: require('@/assets/Icons/Home.png'), active: require('@/assets/Icons/Home (2).png') },
+    light: { inactive: Icons.home, active: Icons.homeActive },
+    dark: { inactive: Icons.home, active: Icons.homeActive },
   },
   map: {
-    light: { inactive: require('@/assets/Icons/Map.png'), active: require('@/assets/Icons/Map (2).png') },
-    dark: { inactive: require('@/assets/Icons/Map.png'), active: require('@/assets/Icons/Map (2).png') },
+    light: { inactive: Icons.map, active: Icons.mapActive },
+    dark: { inactive: Icons.map, active: Icons.mapActive },
   },
   report: {
-    light: { inactive: require('@/assets/Icons/Flag.png'), active: require('@/assets/Icons/RedFlag.png') },
-    dark: { inactive: require('@/assets/Icons/Flag.png'), active: require('@/assets/Icons/RedFlag.png') },
+    light: { inactive: Icons.reportInactive, active: Icons.report },
+    dark: { inactive: Icons.reportInactive, active: Icons.report },
   },
   notification: {
-    light: { inactive: require('@/assets/Icons/Notification.png'), active: require('@/assets/Icons/Notification-Active.png') },
-    dark: { inactive: require('@/assets/Icons/Notification.png'), active: require('@/assets/Icons/Notification-Active.png') },
+    light: { inactive: Icons.notification, active: Icons.notificationActive },
+    dark: { inactive: Icons.notification, active: Icons.notificationActive },
   },
   profile: {
-    light: { inactive: require('@/assets/Icons/ProfileIcon.png'), active: require('@/assets/Icons/ProfileIcon-Active.png') },
-    dark: { inactive: require('@/assets/Icons/ProfileIcon.png'), active: require('@/assets/Icons/ProfileIcon-Active.png') },
+    light: { inactive: Icons.profile, active: Icons.profileActive },
+    dark: { inactive: Icons.profile, active: Icons.profileActive },
   },
 };
 
-const routesByTab = {
-  home: '/home',
-  map: '/map',
-  report: '/report',
-  notification: '/notification',
-  profile: '/profile',
-} as const;
-
-function navigate(tab: BottomNavTab) {
-  router.replace(routesByTab[tab] as never);
-}
-
-function getTabIcon(tab: BottomNavTab, active: boolean, isDark: boolean): ImageSourcePropType {
+function getTabIcon(tab: MainTabRoute, active: boolean, isDark: boolean): ImageSourcePropType {
   const mode = isDark ? 'dark' : 'light';
   const state = active ? 'active' : 'inactive';
 
   return iconSources[tab][mode][state];
 }
 
-function NavIcon({ tab, active }: { tab: BottomNavTab; active: boolean }) {
+function NavIcon({ tab, active }: { tab: MainTabRoute; active: boolean }) {
   const { isDark } = useTheme();
 
-  return <Image source={getTabIcon(tab, active, isDark)} style={styles.navIcon} resizeMode="contain" />;
+  return (
+    <Animated.View key={`${tab}-${active ? 'active' : 'inactive'}`} entering={FadeIn.duration(140)} exiting={FadeOut.duration(90)}>
+      <Image source={getTabIcon(tab, active, isDark)} style={styles.navIcon} resizeMode="contain" fadeDuration={0} />
+    </Animated.View>
+  );
 }
 
-function NavItem({ label, tab, activeTab }: { label: string; tab: BottomNavTab; activeTab: BottomNavTab }) {
+function NavItem({ label, tab, activeTab }: { label: string; tab: MainTabRoute; activeTab: MainTabRoute }) {
   const active = activeTab === tab;
   const theme = useAppTheme();
 
   if (tab === 'report') {
     return (
-      <Pressable style={[styles.navItem, styles.reportNav]} onPress={() => navigate(tab)}>
-        <View style={[styles.reportButton, { backgroundColor: theme.surface, borderColor: active ? theme.primaryDark : theme.borderSoft, shadowColor: theme.black }, active ? styles.activeRaisedButton : null]}>
+      <Pressable style={[styles.navItem, styles.reportNav]} onPress={() => navigateMainTab(activeTab, tab)} disabled={active}>
+        <Animated.View
+          layout={LinearTransition.springify().damping(18)}
+          style={[styles.reportButton, { backgroundColor: theme.surface, borderColor: active ? theme.primaryDark : theme.borderSoft, shadowColor: theme.black }, active ? styles.activeRaisedButton : null]}>
           <NavIcon tab={tab} active={active} />
-        </View>
+        </Animated.View>
         <Text style={active ? styles.activeNavLabel : styles.navLabel}>{label}</Text>
       </Pressable>
     );
   }
 
   return (
-    <Pressable style={styles.navItem} onPress={() => navigate(tab)} disabled={active}>
+    <Pressable style={styles.navItem} onPress={() => navigateMainTab(activeTab, tab)} disabled={active}>
       {active ? (
-        <View style={[styles.activeIconBubble, { backgroundColor: theme.surface }]}>
+        <Animated.View layout={LinearTransition.springify().damping(18)} style={[styles.activeIconBubble, { backgroundColor: theme.surface }]}>
           <NavIcon tab={tab} active />
-        </View>
+        </Animated.View>
       ) : (
         <NavIcon tab={tab} active={false} />
       )}
@@ -93,13 +87,13 @@ export function BottomNav({ activeTab }: BottomNavProps) {
   const theme = useAppTheme();
 
   return (
-    <View style={[styles.bottomNav, { backgroundColor: theme.primary, shadowColor: theme.black }]}>
+    <Animated.View layout={LinearTransition.springify().damping(18)} style={[styles.bottomNav, { backgroundColor: theme.primary, shadowColor: theme.black }]}>
       <NavItem activeTab={activeTab} label="Home" tab="home" />
       <NavItem activeTab={activeTab} label="Map" tab="map" />
       <NavItem activeTab={activeTab} label="Report" tab="report" />
       <NavItem activeTab={activeTab} label="Notification" tab="notification" />
       <NavItem activeTab={activeTab} label="Profile" tab="profile" />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -121,6 +115,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 14 },
     shadowOpacity: 0.18,
     shadowRadius: 24,
+    zIndex: 100,
   },
   navItem: {
     alignItems: 'center',

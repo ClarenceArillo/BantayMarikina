@@ -1,5 +1,7 @@
 const axios = require('axios');
 const crypto = require('crypto');
+const http = require('http');
+const https = require('https');
 const { admin, db } = require('../firebase');
 
 const WEATHER_DOC = db.collection('DashboardData').doc('weather');
@@ -13,6 +15,12 @@ const PANAHON_TIMEOUT_MS = 30000;
 
 const LAT = 14.6507;
 const LON = 121.1029;
+const httpClient = axios.create({
+  httpAgent: new http.Agent({ keepAlive: true, maxSockets: 20 }),
+  httpsAgent: new https.Agent({ keepAlive: true, maxSockets: 20 }),
+});
+let weatherRefreshPromise = null;
+let waterLevelRefreshPromise = null;
 
 const STATION_MAP = {
   'Sto Nino': 'Sto. Niño',
@@ -75,6 +83,27 @@ function getStatus(level, alertwl, alarmwl, criticalwl) {
 
 function buildHash(data) {
   return crypto.createHash('sha1').update(JSON.stringify(data)).digest('hex');
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function getWithRetry(url, options = {}) {
+  let lastError;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await httpClient.get(url, options);
+    } catch (error) {
+      lastError = error;
+      const status = error.response?.status;
+      if (![408, 429, 500, 502, 503, 504].includes(status) || attempt === 2) break;
+      await sleep(700 * (attempt + 1));
+    }
+  }
+
+  throw lastError;
 }
 
 function normalizeName(value) {
@@ -200,7 +229,7 @@ async function writeRecordDoc(docRef, prefix, data, { status = 'ok', message = n
 }
 
 async function getPanahonToken() {
-  const response = await axios.get(PANAHON_URL, {
+  const response = await getWithRetry(PANAHON_URL, {
     timeout: PANAHON_TIMEOUT_MS,
     headers: { 'user-agent': 'Mozilla/5.0' },
   });
@@ -265,7 +294,7 @@ function stripCacheMetadata(data) {
 }
 
 async function fetchWeatherFromApi() {
-  const response = await axios.get('https://api.open-meteo.com/v1/forecast', {
+  const response = await getWithRetry('https://api.open-meteo.com/v1/forecast', {
     timeout: 8000,
     params: {
       latitude: LAT,
@@ -304,7 +333,7 @@ async function fetchWeatherFromApi() {
 }
 
 async function fetchWaterLevelsFromBantayBaha() {
-  const response = await axios.get(BANTAYBAHA_URL, {
+  const response = await getWithRetry(BANTAYBAHA_URL, {
     timeout: BANTAYBAHA_TIMEOUT_MS,
     headers: {
       accept: 'text/html,application/xhtml+xml',
@@ -356,7 +385,7 @@ async function fetchWaterLevelsFromBantayBaha() {
 
 async function fetchWaterLevelsFromPanahon() {
   const token = await getPanahonToken();
-  const response = await axios.get(`${PANAHON_URL}/api/v1/riverbasin/waterlevel`, {
+  const response = await getWithRetry(`${PANAHON_URL}/api/v1/riverbasin/waterlevel`, {
     timeout: PANAHON_TIMEOUT_MS,
     params: {
       token,
@@ -404,7 +433,7 @@ async function fetchWaterLevelsFromPanahon() {
 }
 
 async function fetchWaterLevelsFromOldFfws() {
-  const response = await axios.get(
+  const response = await getWithRetry(
     'https://pasig-marikina-tullahanffws.pagasa.dost.gov.ph/water/main_list.do',
     {
       timeout: 8000,
@@ -564,21 +593,33 @@ async function getCachedDoc(docRef, fetcher, ttlMs, fallback) {
 }
 
 function refreshWeather(options) {
-  return refreshDoc(WEATHER_DOC, fetchWeatherFromApi, {
+  if (weatherRefreshPromise && !options?.force) return weatherRefreshPromise;
+
+  weatherRefreshPromise = refreshDoc(WEATHER_DOC, fetchWeatherFromApi, {
     fallback: createUnavailableWeather,
     recordPrefix: 'weather',
     ttlMs: WEATHER_TTL_MS,
     ...options,
+  }).finally(() => {
+    weatherRefreshPromise = null;
   });
+
+  return weatherRefreshPromise;
 }
 
 function refreshWaterLevels(options) {
-  return refreshDoc(WATER_LEVEL_DOC, fetchWaterLevelsFromApi, {
+  if (waterLevelRefreshPromise && !options?.force) return waterLevelRefreshPromise;
+
+  waterLevelRefreshPromise = refreshDoc(WATER_LEVEL_DOC, fetchWaterLevelsFromApi, {
     fallback: createUnavailableWaterLevels,
     recordPrefix: 'waterlevel',
     ttlMs: WATER_LEVEL_TTL_MS,
     ...options,
+  }).finally(() => {
+    waterLevelRefreshPromise = null;
   });
+
+  return waterLevelRefreshPromise;
 }
 
 function getCachedWeather() {

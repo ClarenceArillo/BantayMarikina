@@ -12,29 +12,21 @@ import {
 } from '@/services/hazardReportService';
 import type { HazardReport, ReportModerationCategory } from '@/types/hazard';
 
+const defaultProfile = require('@/assets/Icons/Default Profile.png');
+const likeIcon = require('@/assets/Icons/Like.png');
+const likeActiveIcon = require('@/assets/Icons/Like-Active.png');
+const commentIcon = require('@/assets/Icons/Comment.png');
+const reportIcon = require('@/assets/Icons/Report.png');
+
 function formatDate(report: HazardReport) {
   if (!report.timestamp) return { date: 'Pending sync', time: '' };
-
   return {
-    date: report.timestamp.toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    }),
-    time: report.timestamp.toLocaleTimeString(undefined, {
-      hour: 'numeric',
-      minute: '2-digit',
-    }),
+    date: report.timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+    time: report.timestamp.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
   };
 }
 
-export function HazardDetailsSheet({
-  report,
-  onClose,
-}: {
-  report: HazardReport | null;
-  onClose: () => void;
-}) {
+export function HazardDetailsSheet({ report, onClose }: { report: HazardReport | null; onClose: () => void }) {
   const theme = useAppTheme();
   const { session } = useAuthSession();
   const [commentText, setCommentText] = useState('');
@@ -57,9 +49,14 @@ export function HazardDetailsSheet({
 
   async function handleComment() {
     if (!report?.id || !session?.uid) return;
-
     try {
-      await addReportComment(report.id, session.uid, session.full_name || session.username || 'Resident', commentText);
+      await addReportComment(
+        report.id,
+        session.uid,
+        session.full_name || session.username || 'Resident',
+        commentText,
+        session.profile?.profilePhotoUrl || session.profile?.profile_photo_url || session.profile?.photoURL || ''
+      );
       setCommentText('');
     } catch (error) {
       Alert.alert('Comment not posted', error instanceof Error ? error.message : 'Please try again.');
@@ -68,7 +65,6 @@ export function HazardDetailsSheet({
 
   async function handleReportPost() {
     if (!report?.id || !session?.uid) return;
-
     try {
       await reportCommunityPost(report.id, session.uid, selectedCategory);
       Alert.alert('Report received', 'Thank you. Community moderation will review this post automatically.');
@@ -85,24 +81,35 @@ export function HazardDetailsSheet({
           <View style={[styles.handle, { backgroundColor: theme.border }]} />
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
             <View style={styles.header}>
+              <Image source={report.reporterPhotoUrl ? { uri: report.reporterPhotoUrl } : defaultProfile} style={[styles.avatar, { backgroundColor: theme.surfaceMuted }]} />
               <View style={styles.titleBlock}>
-                <Text style={[styles.type, { color: theme.text }]}>{report.hazardType}</Text>
-                <Text style={[styles.location, { color: theme.muted }]}>{report.barangay || 'Marikina City'} • {report.source || 'community'}</Text>
+                <Text style={[styles.type, { color: theme.text }]}>{report.reporterName || 'Resident'}</Text>
+                <Text style={[styles.location, { color: theme.muted }]}>{report.hazardType} - {report.barangay || 'Marikina City'} - {report.source || 'community'}</Text>
               </View>
               <View style={[styles.severityBadge, { backgroundColor: theme.warningSoft, borderColor: theme.warning }]}>
                 <Text style={[styles.severityText, { color: theme.warning }]}>{report.severity || 'Unverified'}</Text>
               </View>
             </View>
 
-            {report.imageUrl ? <Image source={{ uri: report.imageUrl }} style={styles.photo} /> : null}
-
+            {report.imageUrl ? (
+              <View style={styles.photoFrame}>
+                <Image source={{ uri: report.imageUrl }} style={[styles.photo, { backgroundColor: theme.surfaceMuted }]} fadeDuration={220} />
+                {report.capturedAtLabel ? (
+                  <View style={styles.timestampBadge}>
+                    <Text style={styles.timestampText}>{report.capturedAtLabel}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
             <Text style={[styles.description, { color: theme.text }]}>{report.description || 'No description provided.'}</Text>
 
             <View style={styles.engagementRow}>
               <Pressable style={[styles.engagementButton, { backgroundColor: engagement.likedByMe ? theme.primaryTint : theme.surfaceMuted }]} onPress={handleLike}>
+                <Image source={engagement.likedByMe ? likeActiveIcon : likeIcon} style={[styles.actionIcon, { tintColor: engagement.likedByMe ? theme.primary : theme.muted }]} resizeMode="contain" />
                 <Text style={[styles.engagementText, { color: engagement.likedByMe ? theme.primary : theme.muted }]}>Like {engagement.likeCount}</Text>
               </Pressable>
               <View style={[styles.engagementButton, { backgroundColor: theme.surfaceMuted }]}>
+                <Image source={commentIcon} style={[styles.actionIcon, { tintColor: theme.muted }]} resizeMode="contain" />
                 <Text style={[styles.engagementText, { color: theme.muted }]}>Comments {engagement.commentCount}</Text>
               </View>
               <View style={[styles.engagementButton, { backgroundColor: theme.surfaceMuted }]}>
@@ -120,14 +127,12 @@ export function HazardDetailsSheet({
                 <Text style={[styles.metaValue, { color: theme.text }]}>{displayTime?.time || '--'}</Text>
               </View>
               <View style={[styles.metaItem, { backgroundColor: theme.surfaceMuted }]}>
-                <Text style={[styles.metaLabel, { color: theme.muted }]}>Reporter</Text>
-                <Text style={[styles.metaValue, { color: theme.text }]}>{report.reporterName || 'Resident'}</Text>
+                <Text style={[styles.metaLabel, { color: theme.muted }]}>Coordinates</Text>
+                <Text style={[styles.metaValue, { color: theme.text }]}>{report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}</Text>
               </View>
               <View style={[styles.metaItem, { backgroundColor: theme.surfaceMuted }]}>
-                <Text style={[styles.metaLabel, { color: theme.muted }]}>Coordinates</Text>
-                <Text style={[styles.metaValue, { color: theme.text }]}>
-                  {report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}
-                </Text>
+                <Text style={[styles.metaLabel, { color: theme.muted }]}>Verification</Text>
+                <Text style={[styles.metaValue, { color: theme.text }]}>{report.source === 'official' ? 'Official' : 'Community verified'}</Text>
               </View>
             </View>
 
@@ -135,8 +140,11 @@ export function HazardDetailsSheet({
               <Text style={[styles.sectionTitle, { color: theme.text }]}>Comments</Text>
               {engagement.comments.slice(-3).map((comment) => (
                 <View key={comment.id} style={[styles.commentItem, { backgroundColor: theme.surfaceMuted }]}>
-                  <Text style={[styles.commentAuthor, { color: theme.text }]}>{comment.userName}</Text>
-                  <Text style={[styles.commentBody, { color: theme.muted }]}>{comment.body}</Text>
+                  <Image source={comment.userPhotoUrl ? { uri: comment.userPhotoUrl } : defaultProfile} style={styles.commentAvatar} />
+                  <View style={styles.commentContent}>
+                    <Text style={[styles.commentAuthor, { color: theme.text }]}>{comment.userName}</Text>
+                    <Text style={[styles.commentBody, { color: theme.muted }]}>{comment.body}</Text>
+                  </View>
                 </View>
               ))}
               <View style={styles.commentInputRow}>
@@ -165,13 +173,12 @@ export function HazardDetailsSheet({
                       selectedCategory === category ? { backgroundColor: theme.dangerSoft, borderColor: theme.danger } : null,
                     ]}
                     onPress={() => setSelectedCategory(category)}>
-                    <Text style={[styles.categoryText, { color: selectedCategory === category ? theme.danger : theme.muted }]}>
-                      {category.replace(/_/g, ' ')}
-                    </Text>
+                    <Text style={[styles.categoryText, { color: selectedCategory === category ? theme.danger : theme.muted }]}>{category.replace(/_/g, ' ')}</Text>
                   </Pressable>
                 ))}
               </View>
               <Pressable style={[styles.reportButton, { borderColor: theme.danger }]} onPress={handleReportPost} disabled={engagement.reportedByMe}>
+                <Image source={reportIcon} style={[styles.actionIcon, { tintColor: theme.danger }]} resizeMode="contain" />
                 <Text style={[styles.reportButtonText, { color: theme.danger }]}>{engagement.reportedByMe ? 'Already Reported' : 'Submit Community Report'}</Text>
               </Pressable>
             </View>
@@ -187,16 +194,14 @@ export function HazardDetailsSheet({
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-  },
+  backdrop: { flex: 1 },
   sheet: {
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     bottom: 0,
     elevation: 18,
-    maxHeight: '88%',
     left: 0,
+    maxHeight: '88%',
     padding: 18,
     paddingBottom: 28,
     position: 'absolute',
@@ -205,172 +210,52 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.22,
     shadowRadius: 14,
   },
-  handle: {
-    alignSelf: 'center',
-    borderRadius: 3,
-    height: 5,
-    width: 46,
+  handle: { alignSelf: 'center', borderRadius: 3, height: 5, width: 46 },
+  scrollContent: { gap: 14, paddingBottom: 10 },
+  header: { alignItems: 'center', flexDirection: 'row', gap: 10, justifyContent: 'space-between' },
+  avatar: { borderRadius: 22, height: 44, width: 44 },
+  titleBlock: { flex: 1, paddingRight: 8 },
+  type: { fontSize: 20, fontWeight: '900' },
+  location: { fontSize: 12, fontWeight: '700', marginTop: 2 },
+  severityBadge: { borderRadius: 14, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
+  severityText: { fontSize: 11, fontWeight: '900' },
+  photo: { borderRadius: 12, height: 176, width: '100%' },
+  photoFrame: { position: 'relative' },
+  timestampBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    bottom: 10,
+    left: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    position: 'absolute',
   },
-  scrollContent: {
-    gap: 14,
-    paddingBottom: 10,
-  },
-  header: {
-    alignItems: 'flex-start',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  titleBlock: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  type: {
-    fontSize: 22,
-    fontWeight: '900',
-  },
-  location: {
-    fontSize: 13,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  severityBadge: {
-    borderRadius: 14,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  severityText: {
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  photo: {
-    borderRadius: 12,
-    height: 156,
-    width: '100%',
-  },
-  engagementRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  engagementButton: {
-    alignItems: 'center',
-    borderRadius: 13,
-    flex: 1,
-    paddingVertical: 10,
-  },
-  engagementText: {
-    fontSize: 11,
-    fontWeight: '900',
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  metaGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  metaItem: {
-    borderRadius: 12,
-    flexBasis: '48%',
-    flexGrow: 1,
-    padding: 12,
-  },
-  metaLabel: {
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-  },
-  metaValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  closeButton: {
-    alignItems: 'center',
-    borderRadius: 14,
-    height: 48,
-    justifyContent: 'center',
-  },
-  closeText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  commentBox: {
-    gap: 9,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  commentItem: {
-    borderRadius: 12,
-    padding: 10,
-  },
-  commentAuthor: {
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  commentBody: {
-    fontSize: 12,
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  commentInputRow: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 8,
-  },
-  commentInput: {
-    borderRadius: 13,
-    borderWidth: 1,
-    flex: 1,
-    fontSize: 13,
-    height: 42,
-    paddingHorizontal: 12,
-  },
-  postButton: {
-    alignItems: 'center',
-    borderRadius: 13,
-    height: 42,
-    justifyContent: 'center',
-    paddingHorizontal: 14,
-  },
-  postButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  moderationBox: {
-    gap: 9,
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  categoryChip: {
-    borderRadius: 13,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  categoryText: {
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'capitalize',
-  },
-  reportButton: {
-    alignItems: 'center',
-    borderRadius: 13,
-    borderWidth: 1,
-    height: 42,
-    justifyContent: 'center',
-  },
-  reportButtonText: {
-    fontSize: 12,
-    fontWeight: '900',
-  },
+  timestampText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  engagementRow: { flexDirection: 'row', gap: 8 },
+  engagementButton: { alignItems: 'center', borderRadius: 13, flex: 1, flexDirection: 'row', gap: 5, justifyContent: 'center', paddingVertical: 10 },
+  actionIcon: { height: 15, width: 15 },
+  engagementText: { fontSize: 11, fontWeight: '900' },
+  description: { fontSize: 14, lineHeight: 20 },
+  metaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  metaItem: { borderRadius: 12, flexBasis: '48%', flexGrow: 1, padding: 12 },
+  metaLabel: { fontSize: 10, fontWeight: '900', textTransform: 'uppercase' },
+  metaValue: { fontSize: 12, fontWeight: '700', marginTop: 4 },
+  closeButton: { alignItems: 'center', borderRadius: 14, height: 48, justifyContent: 'center' },
+  closeText: { color: '#fff', fontSize: 14, fontWeight: '900' },
+  commentBox: { gap: 9 },
+  sectionTitle: { fontSize: 13, fontWeight: '900' },
+  commentItem: { alignItems: 'flex-start', borderRadius: 12, flexDirection: 'row', gap: 8, padding: 10 },
+  commentAvatar: { borderRadius: 15, height: 30, width: 30 },
+  commentContent: { flex: 1 },
+  commentAuthor: { fontSize: 12, fontWeight: '900' },
+  commentBody: { fontSize: 12, fontWeight: '700', marginTop: 2 },
+  commentInputRow: { alignItems: 'center', flexDirection: 'row', gap: 8 },
+  commentInput: { borderRadius: 13, borderWidth: 1, flex: 1, fontSize: 13, height: 42, paddingHorizontal: 12 },
+  postButton: { alignItems: 'center', borderRadius: 13, height: 42, justifyContent: 'center', paddingHorizontal: 14 },
+  postButtonText: { color: '#fff', fontSize: 12, fontWeight: '900' },
+  moderationBox: { gap: 9 },
+  categoryRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  categoryChip: { borderRadius: 13, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
+  categoryText: { fontSize: 10, fontWeight: '900', textTransform: 'capitalize' },
+  reportButton: { alignItems: 'center', borderRadius: 13, borderWidth: 1, flexDirection: 'row', gap: 6, height: 42, justifyContent: 'center' },
+  reportButtonText: { fontSize: 12, fontWeight: '900' },
 });

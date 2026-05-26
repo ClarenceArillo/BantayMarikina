@@ -33,3 +33,8 @@ export async function ensureFirebaseSession(idToken?: string | null) {
 
   return sessionPromise;
 }
+
+export function clearFirebaseSessionState() {
+  activeBackendToken = null;
+  sessionPromise = null;
+}

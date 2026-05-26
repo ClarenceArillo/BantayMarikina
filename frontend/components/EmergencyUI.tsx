@@ -1,5 +1,5 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { useEffect, type ReactNode } from 'react';
+import { memo, useEffect, type ReactNode } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { ImageSourcePropType, StyleProp, TextStyle, ViewStyle } from 'react-native';
 import Animated, {
@@ -10,18 +10,19 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { Radius, Spacing, Typography } from '@/constants/theme';
+import { Icons } from '@/constants/icons';
 import { useTheme } from '@/theme/useTheme';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 const modeIconSources = {
   light: {
-    active: require('@/assets/Icons/LightMode-Active.png'),
-    inactive: require('@/assets/Icons/LightMode.png'),
+    active: Icons.lightModeActive,
+    inactive: Icons.lightMode,
   },
   dark: {
-    active: require('@/assets/Icons/DarkMode-Active.png'),
-    inactive: require('@/assets/Icons/DarkMode.png'),
+    active: Icons.darkModeActive,
+    inactive: Icons.darkMode,
   },
 };
 
@@ -76,7 +77,7 @@ export function ThemeToggle() {
   );
 }
 
-export function AppIcon({
+function AppIconComponent({
   source,
   size = 22,
   tintColor,
@@ -88,9 +89,38 @@ export function AppIcon({
   return (
     <Image
       source={source}
+      fadeDuration={0}
       resizeMode="contain"
       style={{ height: size, tintColor, width: size }}
     />
+  );
+}
+
+export const AppIcon = memo(AppIconComponent);
+
+export function BackButton({
+  label,
+  onPress,
+  style,
+}: {
+  label?: string;
+  onPress: () => void;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const theme = useAppTheme();
+
+  return (
+    <PressScale
+      accessibilityLabel={label || 'Back'}
+      onPress={onPress}
+      style={[
+        styles.backButton,
+        { backgroundColor: theme.primaryTint, borderColor: theme.borderSoft },
+        style,
+      ]}>
+      <Text style={[styles.backIcon, { color: theme.primary }]}>‹</Text>
+      {label ? <Text style={[styles.backLabel, { color: theme.primary }]}>{label}</Text> : null}
+    </PressScale>
   );
 }
 
@@ -380,6 +410,26 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: Typography.caption,
+    fontWeight: '900',
+  },
+  backButton: {
+    alignItems: 'center',
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 4,
+    height: 40,
+    justifyContent: 'center',
+    minWidth: 40,
+    paddingHorizontal: 12,
+  },
+  backIcon: {
+    fontSize: 28,
+    fontWeight: '700',
+    lineHeight: 30,
+  },
+  backLabel: {
+    fontSize: Typography.body,
     fontWeight: '900',
   },
   themeToggle: {

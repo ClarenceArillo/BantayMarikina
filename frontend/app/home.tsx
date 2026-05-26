@@ -14,13 +14,14 @@ import {
 import type { ImageSourcePropType, ImageStyle, StyleProp } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
-import { BottomNav } from '@/components/BottomNav';
 import { AppIcon, Badge, EmergencyCard, PressScale, RiskBanner, SectionHeader, SoftCard, ThemeToggle, useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
+import { SafetyTipsModal } from '@/components/SafetyTipsModal';
 import { Colors, Radius, Spacing, Typography } from '@/constants/theme';
 import { useAuthSession } from '@/context/auth-context';
 import { useHazardReports } from '@/hooks/useHazardReports';
+import { navigateMainTab } from '@/services/mainTabNavigation';
 import { useTheme } from '@/theme/useTheme';
 import {
   getDashboardSnapshot,
@@ -35,7 +36,6 @@ import type { HazardReport } from '@/types/hazard';
 
 const defaultProfile = require('@/assets/Icons/Default Profile.png');
 const iconSources = {
-  alert: require('@/assets/Icons/Alert.png'),
   bantayLogo: require('@/assets/Icons/BantayLogo.png'),
   cloudyDay: require('@/assets/Icons/CloudyDay.png'),
   evacuation: require('@/assets/Icons/Evacuation.png'),
@@ -158,10 +158,12 @@ export default function HomeDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
+  const [isSafetyTipsVisible, setIsSafetyTipsVisible] = useState(false);
   const { reports: hazardReports, isLoading: isMapLoading, error: mapError } = useHazardReports(session?.idToken, 150);
 
   const displayName = useMemo(() => getFirstName(fullName), [fullName]);
-  const openMap = useCallback(() => router.push('/map' as never), []);
+  const openMap = useCallback(() => navigateMainTab('home', 'map'), []);
+  const openEvacuationMap = useCallback(() => navigateMainTab('home', 'map', { evacuation: '1' }), []);
   const openHotlines = useCallback(() => router.push('/hotline' as never), []);
   const emergencyLevel = useMemo(() => {
     if ((waterLevel?.stations ?? []).some((station) => station.status === 'Critical')) return 'Critical';
@@ -225,9 +227,9 @@ export default function HomeDashboard() {
         />
 
         <View style={styles.quickActions}>
-          <QuickAction icon={iconSources.evacuation} label="Evacuation" tone="red" />
+          <QuickAction icon={iconSources.evacuation} label="Evacuation" tone="red" onPress={openEvacuationMap} />
           <QuickAction icon={iconSources.hotline} label="Hotlines" tone="orange" onPress={openHotlines} />
-          <QuickAction icon={iconSources.safetyTips} label="Safety Tips" tone="yellow" />
+          <QuickAction icon={iconSources.safetyTips} label="Safety Tips" tone="yellow" onPress={() => setIsSafetyTipsVisible(true)} />
         </View>
 
         {error ? (
@@ -338,8 +340,8 @@ export default function HomeDashboard() {
         </Text>
       </ScrollView>
 
-      <BottomNav activeTab="home" />
       <HazardDetailsSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
+      <SafetyTipsModal visible={isSafetyTipsVisible} onClose={() => setIsSafetyTipsVisible(false)} />
     </SafeAreaView>
   );
 }

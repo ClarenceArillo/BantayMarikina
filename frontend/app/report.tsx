@@ -14,8 +14,7 @@ import {
   View,
 } from 'react-native';
 
-import { BottomNav } from '@/components/BottomNav';
-import { useAppTheme } from '@/components/EmergencyUI';
+import { BackButton, useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
 import { ReportCard } from '@/components/ReportCard';
@@ -25,10 +24,10 @@ import { useHazardReports } from '@/hooks/useHazardReports';
 import { useLiveLocation } from '@/hooks/useLiveLocation';
 import { ensureFirebaseSession } from '@/services/firebaseSession';
 import { submitHazardReport } from '@/services/hazardReportService';
+import { navigateMainTab } from '@/services/mainTabNavigation';
 import { HAZARD_TYPES, SEVERITY_LEVELS, type HazardReport, type HazardSeverity, type HazardType, type ReportFilters } from '@/types/hazard';
 
 const iconSources = {
-  arrow: require('@/assets/Icons/Arrow.png'),
   camera: require('@/assets/Icons/Camera.png'),
   pin: require('@/assets/Icons/Pin.png'),
 };
@@ -41,6 +40,10 @@ export default function ReportScreen() {
   const [severity, setSeverity] = useState<HazardSeverity>('Moderate');
   const [description, setDescription] = useState('');
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [mediaSizeBytes, setMediaSizeBytes] = useState<number | undefined>();
+  const [mediaType, setMediaType] = useState<'image' | 'video'>('image');
+  const [capturedAtLabel, setCapturedAtLabel] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
   const [filters, setFilters] = useState<ReportFilters>({ dateRange: 'month', hazardType: 'All', severity: 'All', status: 'All', source: 'All' });
@@ -59,23 +62,36 @@ export default function ReportScreen() {
     [location]
   );
 
-  async function pickImage() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  function formatCapturedAt(date: Date) {
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return [
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+      `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`,
+    ].join(' ');
+  }
+
+  async function captureMedia() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert('Permission needed', 'Allow photo access to attach an image.');
+      Alert.alert('Camera Permission Needed', 'Allow camera access to capture hazard media.', [{ text: 'Try Again' }]);
       return;
     }
 
-    const result = await ImagePicker.launchImageLibraryAsync({
+    const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       aspect: [4, 3],
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
       quality: 0.72,
+      videoMaxDuration: 30,
     });
 
     if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      setImageUri(asset.uri);
+      setMediaSizeBytes(asset.fileSize);
+      setMediaType(asset.type === 'video' ? 'video' : 'image');
+      setCapturedAtLabel(formatCapturedAt(new Date()));
     }
   }
 
@@ -93,17 +109,24 @@ export default function ReportScreen() {
         longitude: currentLocation.coords.longitude,
         accuracyMeters: currentLocation.coords.accuracy,
         barangay,
+        idToken: session?.idToken,
         userId: session?.uid,
         reporterName: session?.full_name,
+        reporterPhotoUrl: session?.profile?.profilePhotoUrl || session?.profile?.profile_photo_url || session?.profile?.photoURL,
         imageUri: imageUri || undefined,
+        mediaSizeBytes,
+        mediaType,
+        capturedAtLabel: capturedAtLabel || undefined,
+        onUploadProgress: setUploadProgress,
       });
 
-      Alert.alert('Report submitted', 'Your hazard report is now visible on the live map.');
-      router.replace('/map' as never);
+      Alert.alert('Report Submitted', 'Your hazard report is now visible on the live map.', [{ text: 'Done' }]);
+      navigateMainTab('report', 'map');
     } catch (submitError) {
-      Alert.alert('Unable to submit report', submitError instanceof Error ? submitError.message : 'Please try again.');
+      Alert.alert('Report Failed', submitError instanceof Error ? submitError.message : 'Please try again.', [{ text: 'Try Again' }]);
     } finally {
       setIsSubmitting(false);
+      setUploadProgress(0);
     }
   }
 
@@ -111,9 +134,7 @@ export default function ReportScreen() {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.header}>
-          <Pressable style={[styles.backButton, { backgroundColor: theme.primaryTint }]} onPress={() => router.back()}>
-            <Image source={iconSources.arrow} style={[styles.backIcon, { tintColor: theme.primary }]} resizeMode="contain" />
-          </Pressable>
+          <BackButton onPress={() => router.back()} />
           <View>
             <Text style={[styles.title, { color: theme.text }]}>Report Hazard</Text>
             <Text style={[styles.subtitle, { color: theme.muted }]}>GPS location is attached automatically</Text>
@@ -191,24 +212,39 @@ export default function ReportScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.label, { color: theme.text }]}>Optional Image</Text>
-          <Pressable style={[styles.imagePicker, { backgroundColor: theme.input, borderColor: theme.border }]} onPress={pickImage}>
+          <Text style={[styles.label, { color: theme.text }]}>Optional Media</Text>
+          <Pressable style={[styles.imagePicker, { backgroundColor: theme.input, borderColor: theme.border }]} onPress={captureMedia}>
             {imageUri ? (
-              <Image source={{ uri: imageUri }} style={styles.previewImage} />
+              <>
+                <Image source={{ uri: imageUri }} style={styles.previewImage} />
+                {capturedAtLabel ? (
+                  <View style={styles.timestampBadge}>
+                    <Text style={styles.timestampText}>{capturedAtLabel}</Text>
+                  </View>
+                ) : null}
+              </>
             ) : (
               <>
                 <Image source={iconSources.camera} style={[styles.cameraIcon, { tintColor: theme.primary }]} resizeMode="contain" />
-                <Text style={[styles.imagePickerText, { color: theme.primary }]}>Attach photo</Text>
+                <Text style={[styles.imagePickerText, { color: theme.primary }]}>Open camera</Text>
               </>
             )}
           </Pressable>
+          {imageUri ? (
+            <Text style={[styles.counter, { color: theme.muted }]}>{mediaType === 'video' ? 'Video captured, max 30 seconds' : 'Photo captured with timestamp'}</Text>
+          ) : null}
         </View>
 
         <Pressable
           style={[styles.submitButton, { backgroundColor: theme.primary }, isSubmitting ? styles.submitDisabled : null]}
           disabled={isSubmitting}
           onPress={handleSubmit}>
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.submitText}>Submit Live Report</Text>}
+          {isSubmitting ? (
+            <View style={styles.submitProgress}>
+              <ActivityIndicator color="#fff" />
+              <Text style={styles.submitText}>{uploadProgress ? `Uploading ${uploadProgress}%` : 'Submitting...'}</Text>
+            </View>
+          ) : <Text style={styles.submitText}>Submit Live Report</Text>}
         </Pressable>
 
         <View style={styles.feedSection}>
@@ -223,7 +259,6 @@ export default function ReportScreen() {
           ))}
         </View>
       </ScrollView>
-      <BottomNav activeTab="report" />
       <HazardDetailsSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
     </SafeAreaView>
   );
@@ -242,18 +277,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexDirection: 'row',
     gap: 12,
-  },
-  backButton: {
-    alignItems: 'center',
-    borderRadius: 18,
-    height: 38,
-    justifyContent: 'center',
-    transform: [{ rotate: '180deg' }],
-    width: 38,
-  },
-  backIcon: {
-    height: 18,
-    width: 18,
   },
   title: {
     fontSize: 24,
@@ -368,6 +391,19 @@ const styles = StyleSheet.create({
     height: '100%',
     width: '100%',
   },
+  timestampBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.72)',
+    bottom: 10,
+    left: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    position: 'absolute',
+  },
+  timestampText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '900',
+  },
   submitButton: {
     alignItems: 'center',
     borderRadius: 18,
@@ -381,6 +417,11 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '900',
+  },
+  submitProgress: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: 8,
   },
   feedSection: {
     gap: 12,

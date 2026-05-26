@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { db, admin } = require('../firebase');
+const { createRateLimiter, sanitizeText } = require('../middleware/security');
 
 const MARIKINA_BOUNDS = {
   minLat: 14.57,
@@ -24,6 +25,28 @@ function normalizeHazardType(type) {
   return allowedTypes.has(cleanType) ? cleanType : 'Others';
 }
 
+function normalizeSeverity(severity) {
+  const allowedSeverities = new Set(['Low', 'Moderate', 'High', 'Critical']);
+  const cleanSeverity = String(severity || '').trim();
+  return allowedSeverities.has(cleanSeverity) ? cleanSeverity : 'Moderate';
+}
+
+async function requireAuthenticatedUser(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization || '';
+    const match = authHeader.match(/^Bearer\s+(.+)$/i);
+
+    if (!match) {
+      return res.status(401).json({ error: 'Authentication token is required' });
+    }
+
+    req.auth = await admin.auth().verifyIdToken(match[1]);
+    return next();
+  } catch {
+    return res.status(401).json({ error: 'Invalid or expired authentication token' });
+  }
+}
+
 function validateCoordinates(latitude, longitude) {
   return (
     Number.isFinite(latitude) &&
@@ -35,7 +58,11 @@ function validateCoordinates(latitude, longitude) {
   );
 }
 
-router.post('/', async (req, res) => {
+router.post('/', requireAuthenticatedUser, createRateLimiter({
+  keyPrefix: 'backend-report-create',
+  limit: 6,
+  windowMs: 60_000,
+}), async (req, res) => {
   try {
     const {
       sender_id, userId, hazard_type, hazardType,
@@ -45,7 +72,7 @@ router.post('/', async (req, res) => {
     } = req.body;
     const parsedLatitude = Number(latitude);
     const parsedLongitude = Number(longitude);
-    const cleanDescription = String(description || '').trim();
+    const cleanDescription = sanitizeText(description, 240);
 
     if (!cleanDescription || cleanDescription.length < 8) {
       return res.status(400).json({ error: 'Description must be at least 8 characters' });
@@ -58,7 +85,7 @@ router.post('/', async (req, res) => {
     const cleanHazardType = normalizeHazardType(hazardType || hazard_type);
     const cleanStatus = status || 'active';
     const cleanImageUrl = imageUrl || image_url || null;
-    const cleanUserId = userId || sender_id || null;
+    const cleanUserId = req.auth.uid;
 
     const report = {
       sender_id: cleanUserId,
@@ -72,10 +99,10 @@ router.post('/', async (req, res) => {
       description: cleanDescription,
       image_url: cleanImageUrl,
       imageUrl: cleanImageUrl,
-      status: cleanStatus,
-      severity: String(severity || 'Moderate').trim(),
-      barangay: String(barangay || '').trim(),
-      reporterName: String(reporterName || '').trim(),
+      status: cleanStatus === 'pending' ? 'pending' : 'active',
+      severity: normalizeSeverity(severity),
+      barangay: sanitizeText(barangay, 80),
+      reporterName: sanitizeText(reporterName, 80),
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -88,7 +115,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.get('/', async (req, res) => {
+router.get('/', requireAuthenticatedUser, async (req, res) => {
   try {
     const snapshot = await db.collection('Reports')
       .orderBy('timestamp', 'desc')

@@ -7,41 +7,120 @@ const {
   refreshWeather,
   warmDashboardCache,
 } = require('./services/dashboardCache');
+const { startOfficialAlertPolling, stopOfficialAlertPolling } = require('./services/officialAlertPoller');
+const { createRateLimiter } = require('./middleware/security');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 
-app.use(cors());
-app.use(express.json());
+function log(level, message, meta = {}) {
+  const payload = {
+    level,
+    message,
+    service: 'bantay-marikina-backend',
+    timestamp: new Date().toISOString(),
+    ...meta,
+  };
+  const line = JSON.stringify(payload);
+  if (level === 'error') {
+    console.error(line);
+  } else if (level === 'warn') {
+    console.warn(line);
+  } else {
+    console.log(line);
+  }
+}
+
+process.on('unhandledRejection', (reason) => {
+  log('error', 'Unhandled promise rejection', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+});
+
+process.on('uncaughtException', (error) => {
+  log('error', 'Uncaught exception', {
+    error: error.message,
+    stack: error.stack,
+  });
+});
+
+app.set('trust proxy', 1);
+app.use(cors({
+  origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim()) : true,
+  credentials: false,
+}));
+app.disable('x-powered-by');
+app.use(express.json({ limit: '1mb' }));
+app.use(createRateLimiter({ keyPrefix: 'api', limit: 240, windowMs: 60_000 }));
+app.use((req, res, next) => {
+  req.setTimeout(30_000);
+  res.setTimeout(35_000);
+  next();
+});
 
 // Routes
 const reportsRouter = require('./routes/reports');
 const usersRouter = require('./routes/users');
+const mediaRouter = require('./routes/media');
 const weatherRouter = require('./routes/weather');
 const waterLevelRouter = require('./routes/waterlevel');
+const alertsRouter = require('./routes/alerts');
 
 app.get('/', (req, res) => {
   res.json({ message: 'MarikinaSafeWatch API is running!' });
 });
 
-app.use('/api/reports', reportsRouter);
-app.use('/api/users', usersRouter);
-app.use('/api/weather', weatherRouter);
-app.use('/api/waterlevel', waterLevelRouter);
-
-app.listen(PORT, HOST, () => {
-  console.log(`Server running on http://${HOST}:${PORT}`);
+app.get('/health', (req, res) => {
+  res.json({ ok: true, uptime: process.uptime() });
 });
 
-warmDashboardCache();
+app.use('/api/reports', reportsRouter);
+app.use('/api/users', usersRouter);
+app.use('/api/media', mediaRouter);
+app.use('/api/weather', weatherRouter);
+app.use('/api/waterlevel', waterLevelRouter);
+app.use('/api/alerts', alertsRouter);
+
+const server = app.listen(PORT, HOST, () => {
+  log('info', 'Backend listener ready', { host: HOST, port: Number(PORT) });
+});
+server.keepAliveTimeout = 65_000;
+server.headersTimeout = 66_000;
+server.on('error', (error) => {
+  log('error', 'Backend listener failed', {
+    code: error.code,
+    error: error.message,
+    host: HOST,
+    port: Number(PORT),
+  });
+  process.exitCode = 1;
+});
+
+warmDashboardCache().catch((error) => {
+  log('warn', 'Dashboard cache warmup failed after listener startup', {
+    error: error.message,
+  });
+});
+startOfficialAlertPolling();
 cron.schedule('*/10 * * * *', () => {
   refreshWeather().catch((error) => {
-    console.error('Failed to refresh weather cache:', error.message);
+    log('warn', 'Failed to refresh weather cache', { error: error.message });
   });
 });
 cron.schedule('*/5 * * * *', () => {
   refreshWaterLevels().catch((error) => {
-    console.error('Failed to refresh water level cache:', error.message);
+    log('warn', 'Failed to refresh water level cache', { error: error.message });
   });
+});
+
+process.on('SIGTERM', () => {
+  stopOfficialAlertPolling();
+  server.close(() => process.exit(0));
+});
+
+process.on('SIGINT', () => {
+  stopOfficialAlertPolling();
+  server.close(() => process.exit(0));
 });

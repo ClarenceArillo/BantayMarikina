@@ -1,17 +1,20 @@
-import { useState } from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
-import { BottomNav } from '@/components/BottomNav';
 import { useAppTheme } from '@/components/EmergencyUI';
 import { HazardDetailsSheet } from '@/components/HazardDetailsSheet';
 import { HazardMapView } from '@/components/HazardMapView';
 import { ReportFilterBar } from '@/components/ReportFilterBar';
 import { useAuthSession } from '@/context/auth-context';
+import { useEvacuationSites } from '@/hooks/useEvacuationSites';
 import { useHazardReports } from '@/hooks/useHazardReports';
 import { useLiveLocation } from '@/hooks/useLiveLocation';
 import type { HazardReport, ReportFilters } from '@/types/hazard';
 
 const iconSources = {
+  evacuation: require('@/assets/Icons/Evacuation.png'),
+  filter: require('@/assets/Icons/FilterIcon.png'),
   pin: require('@/assets/Icons/Pin.png'),
 };
 
@@ -31,7 +34,39 @@ function IconButton({
   );
 }
 
+function MapCapsule({
+  active,
+  icon,
+  label,
+  tone,
+  onPress,
+}: {
+  active: boolean;
+  icon: number;
+  label: string;
+  tone: 'primary' | 'danger';
+  onPress: () => void;
+}) {
+  const theme = useAppTheme();
+  const activeColor = tone === 'danger' ? theme.danger : theme.primary;
+  const activeBg = tone === 'danger' ? theme.dangerSoft : theme.primaryTint;
+
+  return (
+    <Pressable
+      style={[
+        styles.mapCapsule,
+        { backgroundColor: theme.surface, borderColor: theme.borderSoft, shadowColor: theme.black },
+        active ? { backgroundColor: activeBg, borderColor: activeColor } : null,
+      ]}
+      onPress={onPress}>
+      <Image source={icon} style={[styles.capsuleIcon, { tintColor: active ? activeColor : theme.primary }]} resizeMode="contain" />
+      <Text style={[styles.capsuleText, { color: active ? activeColor : theme.primary }]} numberOfLines={1}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export default function MapScreen() {
+  const params = useLocalSearchParams<{ evacuation?: string }>();
   const { session } = useAuthSession();
   const theme = useAppTheme();
   const [filters, setFilters] = useState<ReportFilters>({ dateRange: 'month', hazardType: 'All', severity: 'All', status: 'All', source: 'All' });
@@ -39,6 +74,13 @@ export default function MapScreen() {
   const { location, isLocating, error: locationError, locateOnce } = useLiveLocation(true);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
+  const [isFilterVisible, setIsFilterVisible] = useState(false);
+  const [isEvacuationVisible, setIsEvacuationVisible] = useState(() => params.evacuation === '1');
+  const {
+    sites: evacuationSites,
+    isLoading: isLoadingEvacuationSites,
+    error: evacuationSitesError,
+  } = useEvacuationSites(isEvacuationVisible);
 
   const userLocation = location
     ? {
@@ -53,15 +95,23 @@ export default function MapScreen() {
     setFocusSignal((value) => value + 1);
   }
 
+  useEffect(() => {
+    if (params.evacuation === '1') {
+      setIsEvacuationVisible(true);
+    }
+  }, [params.evacuation]);
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <View style={styles.mapShell}>
         <HazardMapView
           reports={reports}
+          evacuationSites={evacuationSites}
           pinSource={iconSources.pin}
+          evacuationSource={iconSources.evacuation}
           userLocation={userLocation}
           isLoading={isLoading}
-          error={error || locationError}
+          error={error || locationError || (isEvacuationVisible ? evacuationSitesError : null)}
           height="100%"
           initialZoom={13}
           onMarkerPress={setSelectedReport}
@@ -75,16 +125,43 @@ export default function MapScreen() {
           </View>
         </View>
 
-        <View style={[styles.filterPanel, { backgroundColor: theme.surface, borderColor: theme.borderSoft, shadowColor: theme.black }]}>
-          <ReportFilterBar filters={filters} onChange={setFilters} compact />
+        <View style={styles.mapModeRow}>
+          <MapCapsule
+            active={isFilterVisible}
+            icon={iconSources.filter}
+            label="Filter"
+            tone="primary"
+            onPress={() => setIsFilterVisible((value) => !value)}
+          />
+          <MapCapsule
+            active={isEvacuationVisible}
+            icon={iconSources.evacuation}
+            label="Evacuation"
+            tone="danger"
+            onPress={() => setIsEvacuationVisible((value) => !value)}
+          />
         </View>
+
+        {isFilterVisible ? (
+          <View style={[styles.filterPanel, { backgroundColor: theme.surface, borderColor: theme.borderSoft, shadowColor: theme.black }]}>
+            <ReportFilterBar filters={filters} onChange={setFilters} compact />
+          </View>
+        ) : null}
+
+        {isEvacuationVisible ? (
+          <View style={[styles.evacuationBadge, { backgroundColor: theme.dangerSoft, borderColor: theme.danger, shadowColor: theme.black }]}>
+            <Image source={iconSources.evacuation} style={[styles.evacuationBadgeIcon, { tintColor: theme.danger }]} resizeMode="contain" />
+            <Text style={[styles.evacuationBadgeText, { color: theme.danger }]}>
+              {isLoadingEvacuationSites ? 'Loading evacuation sites' : `${evacuationSites.length} evacuation sites visible`}
+            </Text>
+          </View>
+        ) : null}
 
         <View style={styles.controls}>
           <IconButton label={isLocating ? 'Locating...' : 'Locate Me'} onPress={handleLocateMe} />
         </View>
       </View>
 
-      <BottomNav activeTab="map" />
       <HazardDetailsSheet report={selectedReport} onClose={() => setSelectedReport(null)} />
     </SafeAreaView>
   );
@@ -122,6 +199,37 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 2,
   },
+  mapModeRow: {
+    flexDirection: 'row',
+    gap: 12,
+    left: 16,
+    position: 'absolute',
+    right: 16,
+    top: 92,
+  },
+  mapCapsule: {
+    alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    elevation: 9,
+    flex: 1,
+    flexDirection: 'row',
+    gap: 8,
+    height: 56,
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+  },
+  capsuleIcon: {
+    height: 24,
+    width: 24,
+  },
+  capsuleText: {
+    fontSize: 16,
+    fontWeight: '900',
+  },
   controls: {
     bottom: 98,
     flexDirection: 'row',
@@ -141,7 +249,31 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.14,
     shadowRadius: 8,
-    top: 92,
+    top: 160,
+  },
+  evacuationBadge: {
+    alignItems: 'center',
+    borderRadius: 999,
+    borderWidth: 1,
+    bottom: 160,
+    elevation: 9,
+    flexDirection: 'row',
+    gap: 8,
+    left: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    position: 'absolute',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+  },
+  evacuationBadgeIcon: {
+    height: 18,
+    width: 18,
+  },
+  evacuationBadgeText: {
+    fontSize: 12,
+    fontWeight: '900',
   },
   iconButton: {
     alignItems: 'center',

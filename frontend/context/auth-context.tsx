@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 
 import type { LoginResponse, UserProfileResponse } from '@/services/authService';
 import { ensureFirebaseSession } from '@/services/firebaseSession';
-import { getUserProfilePhotoUrl } from '@/services/profilePhotoService';
+import { getUserProfilePhotoUrl, subscribeToUserProfilePhoto } from '@/services/profilePhotoService';
 
 type AuthSessionContextValue = {
   session: LoginResponse | null;
@@ -39,18 +39,33 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         }
       });
 
+    let unsubscribeProfile: (() => void) | undefined;
     ensureFirebaseSession(session.idToken)
       .then(() => getUserProfilePhotoUrl(session.uid))
       .then((uri) => {
-        if (!isActive || !uri) return;
+        if (!isActive) return;
 
-        setProfilePhotoUriState(uri);
-        AsyncStorage.setItem(`bantay.profile.photo.${session.uid}`, uri).catch(() => undefined);
+        if (uri) {
+          setProfilePhotoUriState(uri);
+          AsyncStorage.setItem(`bantay.profile.photo.${session.uid}`, uri).catch(() => undefined);
+        }
+
+        if (!isActive) return;
+        unsubscribeProfile = subscribeToUserProfilePhoto(session.uid, (uri) => {
+          if (!isActive) return;
+          setProfilePhotoUriState(uri);
+          if (uri) {
+            AsyncStorage.setItem(`bantay.profile.photo.${session.uid}`, uri).catch(() => undefined);
+          } else {
+            AsyncStorage.removeItem(`bantay.profile.photo.${session.uid}`).catch(() => undefined);
+          }
+        });
       })
       .catch(() => undefined);
 
     return () => {
       isActive = false;
+      unsubscribeProfile?.();
     };
   }, [session?.idToken, session?.profile?.photoURL, session?.profile?.profilePhotoUrl, session?.profile?.profile_photo_url, session?.uid]);
 

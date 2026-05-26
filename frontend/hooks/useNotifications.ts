@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 
 import { ensureFirebaseSession } from '@/services/firebaseSession';
 import { subscribeToNotifications } from '@/services/hazardReportService';
@@ -12,6 +13,8 @@ export function useNotifications(userId?: string | null, idToken?: string | null
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
     let isMounted = true;
+    let shouldSubscribe = false;
+    let appStateSubscription: { remove: () => void } | undefined;
 
     if (!userId) {
       setNotifications([]);
@@ -19,38 +22,64 @@ export function useNotifications(userId?: string | null, idToken?: string | null
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
+    const stop = () => {
+      shouldSubscribe = false;
+      unsubscribe?.();
+      unsubscribe = undefined;
+    };
 
-    ensureFirebaseSession(idToken)
-      .then(() => {
-        if (!isMounted) return;
+    const start = () => {
+      stop();
+      shouldSubscribe = true;
+      setIsLoading(true);
+      setError(null);
 
-        unsubscribe = subscribeToNotifications(
-          userId,
-          (nextNotifications) => {
-            if (!isMounted) return;
-            setNotifications(nextNotifications);
-            setIsLoading(false);
-          },
-          (snapshotError) => {
-            if (!isMounted) return;
-            setError(snapshotError.message);
-            setIsLoading(false);
-          },
-          120,
-          filters
-        );
-      })
-      .catch((sessionError) => {
-        if (!isMounted) return;
-        setError(sessionError instanceof Error ? sessionError.message : 'Unable to load notifications.');
-        setIsLoading(false);
-      });
+      ensureFirebaseSession(idToken)
+        .then(() => {
+          if (!isMounted || !shouldSubscribe) return;
+
+          unsubscribe = subscribeToNotifications(
+            userId,
+            (nextNotifications) => {
+              if (!isMounted) return;
+              setNotifications(nextNotifications);
+              setIsLoading(false);
+            },
+            (snapshotError) => {
+              if (!isMounted) return;
+              setError(snapshotError.message);
+              setIsLoading(false);
+            },
+            120,
+            filters
+          );
+        })
+        .catch((sessionError) => {
+          if (!isMounted || !shouldSubscribe) return;
+          setError(sessionError instanceof Error ? sessionError.message : 'Unable to load notifications.');
+          setIsLoading(false);
+        });
+    };
+
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === 'active') {
+        start();
+      } else {
+        stop();
+      }
+    };
+
+    if (AppState.currentState === 'active') {
+      start();
+    } else {
+      setIsLoading(false);
+    }
+    appStateSubscription = AppState.addEventListener('change', handleAppStateChange);
 
     return () => {
       isMounted = false;
-      unsubscribe?.();
+      appStateSubscription?.remove();
+      stop();
     };
   }, [filters, idToken, userId]);
 

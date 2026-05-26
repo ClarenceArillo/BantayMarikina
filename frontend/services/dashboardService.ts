@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 
 import { getFirebaseClients } from '@/config/firebase';
+import { subscribeWithRetry } from '@/services/realtime';
 
 export type WeatherForecast = {
   day: string;
@@ -113,25 +114,31 @@ function notifyError(error: unknown) {
 function startFirestoreListeners() {
   if (unsubscribeWeather && unsubscribeWaterLevel) return;
 
-  unsubscribeWeather = onSnapshot(
-    getDashboardDoc('weather'),
-    (snapshot) => {
-      publish({
-        ...cachedData,
-        weather: snapshot.exists() ? cleanFirestoreData<WeatherData>(snapshot.data()) : null,
-      });
-    },
+  unsubscribeWeather = subscribeWithRetry(
+    (handleError) => onSnapshot(
+      getDashboardDoc('weather'),
+      (snapshot) => {
+        publish({
+          ...cachedData,
+          weather: snapshot.exists() ? cleanFirestoreData<WeatherData>(snapshot.data()) : null,
+        });
+      },
+      handleError
+    ),
     notifyError
   );
 
-  unsubscribeWaterLevel = onSnapshot(
-    getDashboardDoc('waterlevel'),
-    (snapshot) => {
-      publish({
-        ...cachedData,
-        waterLevel: snapshot.exists() ? cleanFirestoreData<WaterLevelData>(snapshot.data()) : null,
-      });
-    },
+  unsubscribeWaterLevel = subscribeWithRetry(
+    (handleError) => onSnapshot(
+      getDashboardDoc('waterlevel'),
+      (snapshot) => {
+        publish({
+          ...cachedData,
+          waterLevel: snapshot.exists() ? cleanFirestoreData<WaterLevelData>(snapshot.data()) : null,
+        });
+      },
+      handleError
+    ),
     notifyError
   );
 }
