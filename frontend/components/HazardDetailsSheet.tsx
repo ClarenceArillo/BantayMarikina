@@ -7,6 +7,7 @@ import { useReportEngagement } from '@/hooks/useReportEngagement';
 import { ensureFirebaseSession } from '@/services/firebaseSession';
 import {
   addReportComment,
+  deleteHazardReport,
   recordReportView,
   reportCommunityPost,
   toggleReportLike,
@@ -41,6 +42,7 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
   const { engagement } = useReportEngagement(report?.id, session?.uid, session?.idToken);
   const displayTime = report ? formatReportDateTime(report.timestamp) : null;
   const severityStyle = report ? getSeverityStyle(theme, report.severity) : null;
+  const isOwnReport = Boolean(report?.userId && session?.uid && report.userId === session.uid);
 
   useEffect(() => {
     let isMounted = true;
@@ -90,6 +92,10 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
 
   async function handleReportPost() {
     if (!report?.id || !session?.uid || !session?.idToken) return;
+    if (isOwnReport) {
+      Alert.alert('Cannot report own post', 'You can delete your own hazard report instead.');
+      return;
+    }
     try {
       const firebaseUid = await ensureFirebaseSession(session.idToken);
       await reportCommunityPost(report.id, firebaseUid, selectedCategory);
@@ -97,6 +103,31 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
     } catch (error) {
       Alert.alert('Unable to report post', error instanceof Error ? error.message : 'Please try again.');
     }
+  }
+
+  async function handleDeleteReport() {
+    if (!report?.id || !session?.idToken) return;
+
+    Alert.alert(
+      'Delete hazard report?',
+      'This removes the report from the live map and notification feed.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const firebaseUid = await ensureFirebaseSession(session.idToken);
+              await deleteHazardReport(report.id, firebaseUid);
+              onClose();
+            } catch (error) {
+              Alert.alert('Unable to delete report', error instanceof Error ? error.message : 'Please try again.');
+            }
+          },
+        },
+      ]
+    );
   }
 
   return (
@@ -187,27 +218,36 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
               </View>
             </View>
 
-            <View style={styles.moderationBox}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>Report Post</Text>
-              <View style={styles.categoryRow}>
-                {(['false_report', 'inaccurate_image', 'misleading_information', 'spam', 'other'] as ReportModerationCategory[]).map((category) => (
-                  <Pressable
-                    key={category}
-                    style={[
-                      styles.categoryChip,
-                      { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
-                      selectedCategory === category ? { backgroundColor: theme.dangerSoft, borderColor: theme.danger } : null,
-                    ]}
-                    onPress={() => setSelectedCategory(category)}>
-                    <Text style={[styles.categoryText, { color: selectedCategory === category ? theme.danger : theme.muted }]}>{category.replace(/_/g, ' ')}</Text>
-                  </Pressable>
-                ))}
+            {isOwnReport ? (
+              <View style={styles.moderationBox}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Manage Report</Text>
+                <Pressable style={[styles.reportButton, { borderColor: theme.danger }]} onPress={handleDeleteReport}>
+                  <Text style={[styles.reportButtonText, { color: theme.danger }]}>Delete My Report</Text>
+                </Pressable>
               </View>
-              <Pressable style={[styles.reportButton, { borderColor: theme.danger }]} onPress={handleReportPost} disabled={engagement.reportedByMe}>
-                <Image source={reportIcon} style={[styles.actionIcon, { tintColor: theme.danger }]} resizeMode="contain" />
-                <Text style={[styles.reportButtonText, { color: theme.danger }]}>{engagement.reportedByMe ? 'Already Reported' : 'Submit Community Report'}</Text>
-              </Pressable>
-            </View>
+            ) : (
+              <View style={styles.moderationBox}>
+                <Text style={[styles.sectionTitle, { color: theme.text }]}>Report Post</Text>
+                <View style={styles.categoryRow}>
+                  {(['false_report', 'inaccurate_image', 'misleading_information', 'spam', 'other'] as ReportModerationCategory[]).map((category) => (
+                    <Pressable
+                      key={category}
+                      style={[
+                        styles.categoryChip,
+                        { backgroundColor: theme.surfaceMuted, borderColor: theme.border },
+                        selectedCategory === category ? { backgroundColor: theme.dangerSoft, borderColor: theme.danger } : null,
+                      ]}
+                      onPress={() => setSelectedCategory(category)}>
+                      <Text style={[styles.categoryText, { color: selectedCategory === category ? theme.danger : theme.muted }]}>{category.replace(/_/g, ' ')}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Pressable style={[styles.reportButton, { borderColor: theme.danger }]} onPress={handleReportPost} disabled={engagement.reportedByMe}>
+                  <Image source={reportIcon} style={[styles.actionIcon, { tintColor: theme.danger }]} resizeMode="contain" />
+                  <Text style={[styles.reportButtonText, { color: theme.danger }]}>{engagement.reportedByMe ? 'Already Reported' : 'Submit Community Report'}</Text>
+                </Pressable>
+              </View>
+            )}
 
             <Pressable style={[styles.closeButton, { backgroundColor: theme.primary }]} onPress={onClose}>
               <Text style={styles.closeText}>Close</Text>

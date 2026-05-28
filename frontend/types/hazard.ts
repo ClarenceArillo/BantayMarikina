@@ -116,6 +116,8 @@ export type ReportNotification = {
   longitude?: number;
   barangay?: string;
   reporterName?: string;
+  moderationReason?: ReportModerationCategory | string;
+  moderationReasonLabel?: string;
   createdAt: Date | null;
   read: boolean;
   report?: HazardReport | null;

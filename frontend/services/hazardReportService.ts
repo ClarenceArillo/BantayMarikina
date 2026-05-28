@@ -49,6 +49,34 @@ const RECENT_REPORT_COOLDOWN_MS = 60_000;
 const recentSubmitChecks = new Map<string, number>();
 const engagementWriteLocks = new Map<string, Promise<void>>();
 
+function logReportTrace(message: string, meta: Record<string, unknown> = {}) {
+  console.log('[hazard-report-submit]', message, {
+    at: new Date().toISOString(),
+    ...meta,
+  });
+}
+
+function summarizeValue(value: unknown): unknown {
+  if (value instanceof Timestamp) return 'timestamp';
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(summarizeValue);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      key.toLowerCase().includes('token') ? '[redacted]' : summarizeValue(item),
+    ])
+  );
+}
+
+function summarizePayload(payload: Record<string, unknown>) {
+  return {
+    keys: Object.keys(payload).sort(),
+    data: summarizeValue(payload),
+  };
+}
+
 function isFirestoreErrorCode(error: unknown, code: string) {
   return typeof error === 'object'
     && error !== null
@@ -79,6 +107,21 @@ function getCurrentFirebaseUid(fallbackUserId?: string) {
 
   if (!firebaseUid) {
     throw new Error('Please sign in before using post engagement.');
+  }
+
+  return firebaseUid;
+}
+
+function getAuthoritativeFirebaseUid(callerUserId?: string) {
+  const { auth } = getFirebaseClients();
+  const firebaseUid = auth.currentUser?.uid;
+
+  if (!firebaseUid) {
+    throw new Error('Please sign in before submitting or managing hazard reports.');
+  }
+
+  if (callerUserId && callerUserId !== firebaseUid) {
+    throw new Error('Your Firebase session does not match the signed-in app user. Please sign out, sign in again, and retry.');
   }
 
   return firebaseUid;
@@ -233,6 +276,8 @@ function normalizeNotification(
     longitude: data.longitude,
     barangay: data.barangay,
     reporterName: data.reporterName,
+    moderationReason: data.moderationReason,
+    moderationReasonLabel: data.moderationReasonLabel,
     createdAt: toDate(data.createdAt),
     read: readIds.has(doc.id),
     report,
@@ -387,28 +432,49 @@ export function validateHazardReport(input: HazardReportInput) {
 
 export async function submitHazardReport(input: HazardReportInput) {
   validateHazardReport(input);
-  if (!input.userId) {
-    throw new Error('Please sign in before submitting a report.');
-  }
 
-  const { db } = getFirebaseClients();
-  const lastLocalSubmitAt = recentSubmitChecks.get(input.userId) || 0;
+  const { auth, db } = getFirebaseClients();
+  const authoritativeUserId = getAuthoritativeFirebaseUid(input.userId);
+  await auth.currentUser?.getIdToken(true).catch((error) => {
+    logReportTrace('unable to force-refresh Firebase token before submit', {
+      firebaseUid: auth.currentUser?.uid || null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  });
+  const firebaseTokenResult = await auth.currentUser?.getIdTokenResult().catch((error) => {
+    logReportTrace('unable to read Firebase token before submit', {
+      firebaseUid: auth.currentUser?.uid || null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  });
+  const lastLocalSubmitAt = recentSubmitChecks.get(authoritativeUserId) || 0;
   if (Date.now() - lastLocalSubmitAt < RECENT_REPORT_COOLDOWN_MS) {
     throw new Error('Please wait a minute before submitting another report.');
   }
 
   let lastReportAt: Date | null = null;
   try {
-    const guardSnapshot = await getDoc(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId));
+    const guardSnapshot = await getDoc(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, authoritativeUserId));
     lastReportAt = guardSnapshot.exists()
       ? toDate(guardSnapshot.data().lastSubmittedAt || guardSnapshot.data().updatedAt)
       : null;
+    logReportTrace('loaded report submission guard', {
+      path: `${REPORT_SUBMISSION_GUARDS_COLLECTION}/${authoritativeUserId}`,
+      exists: guardSnapshot.exists(),
+      guardKeys: guardSnapshot.exists() ? Object.keys(guardSnapshot.data()).sort() : [],
+      lastReportAt: lastReportAt?.toISOString() || null,
+    });
   } catch {
+    logReportTrace('unable to read report submission guard; relying on server rules', {
+      path: `${REPORT_SUBMISSION_GUARDS_COLLECTION}/${authoritativeUserId}`,
+    });
     // Guard reads are a throttle optimization. Server rules still enforce the cooldown.
   }
 
   if (lastReportAt && Date.now() - lastReportAt.getTime() < RECENT_REPORT_COOLDOWN_MS) {
-    recentSubmitChecks.set(input.userId, lastReportAt.getTime());
+    recentSubmitChecks.set(authoritativeUserId, lastReportAt.getTime());
     throw new Error('Please wait a minute before submitting another report.');
   }
 
@@ -442,8 +508,8 @@ export async function submitHazardReport(input: HazardReportInput) {
     accuracyMeters: input.accuracyMeters ?? null,
     severity: input.severity,
     barangay: input.barangay || '',
-    userId: input.userId || null,
-    sender_id: input.userId || null,
+    userId: authoritativeUserId,
+    sender_id: authoritativeUserId,
     reporterName: input.reporterName || '',
     reporterPhotoUrl: input.reporterPhotoUrl || '',
     reporter_photo_url: input.reporterPhotoUrl || '',
@@ -463,22 +529,53 @@ export async function submitHazardReport(input: HazardReportInput) {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     });
-    const batch = writeBatch(db);
-
-    batch.set(reportRef, reportPayload);
-    batch.set(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId), {
+    const guardRef = doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, authoritativeUserId);
+    const guardPayload = {
       lastReportId: reportRef.id,
       lastSubmittedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      userId: input.userId,
-    }, { merge: true });
+      userId: authoritativeUserId,
+    };
+    const batch = writeBatch(db);
+
+    logReportTrace('committing report batch', {
+      authUid: auth.currentUser?.uid || null,
+      callerUserId: input.userId || null,
+      firebaseTokenExpirationTime: firebaseTokenResult?.expirationTime || null,
+      firebaseTokenIssuedAtTime: firebaseTokenResult?.issuedAtTime || null,
+      reportPath: `${REPORTS_COLLECTION}/${reportRef.id}`,
+      guardPath: `${REPORT_SUBMISSION_GUARDS_COLLECTION}/${authoritativeUserId}`,
+      ruleExpectations: {
+        signedIn: Boolean(auth.currentUser),
+        userMatchesAuth: auth.currentUser?.uid === authoritativeUserId,
+        senderMatchesUser: reportPayload.sender_id === reportPayload.userId,
+        guardLastReportMatchesReport: guardPayload.lastReportId === reportRef.id,
+        insideMarikina: isInsideMarikina(input.latitude, input.longitude),
+      },
+      reportPayload: summarizePayload(reportPayload),
+      guardPayload: summarizePayload(guardPayload),
+    });
+
+    batch.set(reportRef, reportPayload);
+    batch.set(guardRef, guardPayload);
 
     await batch.commit();
-    recentSubmitChecks.set(input.userId, Date.now());
+    recentSubmitChecks.set(authoritativeUserId, Date.now());
+    logReportTrace('report batch committed', {
+      reportPath: `${REPORTS_COLLECTION}/${reportRef.id}`,
+      guardPath: `${REPORT_SUBMISSION_GUARDS_COLLECTION}/${authoritativeUserId}`,
+      authUid: auth.currentUser?.uid || null,
+    });
     return reportRef;
   } catch (error) {
+    logReportTrace('report batch failed', {
+      authUid: auth.currentUser?.uid || null,
+      callerUserId: input.userId || null,
+      code: typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: unknown }).code : null,
+      message: error instanceof Error ? error.message : String(error),
+    });
     if (cloudinaryMedia?.public_id && input.idToken) {
-      deleteCloudinaryMedia(input.idToken, cloudinaryMedia.public_id, mediaResourceType, input.userId).catch(() => undefined);
+      deleteCloudinaryMedia(input.idToken, cloudinaryMedia.public_id, mediaResourceType, authoritativeUserId).catch(() => undefined);
     }
     throw error;
   }
@@ -811,4 +908,25 @@ export async function reportCommunityPost(
       ignoreAlreadyExists(error);
     }
   });
+}
+
+export async function deleteHazardReport(reportId: string, userId?: string) {
+  const authoritativeUserId = getAuthoritativeFirebaseUid(userId);
+  const { db } = getFirebaseClients();
+  const reportRef = doc(db, REPORTS_COLLECTION, reportId);
+  const reportSnapshot = await getDocFromServer(reportRef).catch((error) => {
+    if (isFirestoreErrorCode(error, 'unavailable')) return getDoc(reportRef);
+    throw error;
+  });
+
+  if (!reportSnapshot.exists()) {
+    throw new Error('This report has already been deleted.');
+  }
+
+  const ownerId = reportSnapshot.data().userId || reportSnapshot.data().sender_id;
+  if (ownerId !== authoritativeUserId) {
+    throw new Error('You can only delete your own hazard reports.');
+  }
+
+  await deleteDoc(reportRef);
 }

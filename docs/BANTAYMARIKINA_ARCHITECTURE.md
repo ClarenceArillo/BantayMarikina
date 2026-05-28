@@ -47,7 +47,7 @@ The project goal is to provide fast situational awareness while keeping the app 
 - Community hazard reporting with GPS, image/video capture, Cloudinary upload, and Firestore persistence.
 - Realtime notifications for community reports, official alerts, and moderation outcomes.
 - Social interactions: likes, comments, views, and community flagging.
-- Auto-moderation based on report-to-view ratio.
+- Auto-moderation after five different authenticated users flag the same report.
 - Profile photo uploads and profile updates.
 - Dark mode and themed UI primitives.
 - Backend polling for official sources and dashboard data.
@@ -469,7 +469,7 @@ This keeps bandwidth low and improves image rendering performance. Videos use ge
 
 ### Cleanup
 
-Cloud Functions clean up report media when reports are deleted or moderated out. Profile photo replacement returns the previous `public_id`, and the frontend asks the backend to delete it.
+Cloud Functions clean up report media when reports are deleted or moderated out. When an owner deletes a report, Cloud Functions also remove the report's engagement subcollections and related notification documents. Profile photo replacement returns the previous `public_id`, and the frontend asks the backend to delete it.
 
 ---
 
@@ -721,10 +721,10 @@ When a user flags a report, Cloud Functions:
 2. Updates category counts.
 3. Increments `userReportCount`.
 4. Computes the dominant category.
-5. Compares `userReportCount / viewCount`.
-6. Auto-removes the report if the ratio is greater than 0.5.
+5. Auto-removes the report when five different users have flagged it.
+6. Stores the dominant category as `removedReason`.
 7. Writes a moderation log.
-8. Lets `onReportRemoved` notify the original reporter.
+8. Lets `onReportRemoved` notify the original reporter with an `ADMIN/OFFICIAL` label and the removal reason/category.
 
 This keeps moderation-sensitive state out of direct client control.
 
@@ -740,10 +740,12 @@ Security is layered across frontend validation, backend validation, Firestore ru
 
 - Signed-in users only for report and notification reads.
 - Owner-only report creation.
+- Owner-only report deletion, with trusted Cloud Functions cleanup for report subcollections and related notifications.
 - Marikina coordinate bounds.
-- Allowed hazard types and severities.
+- Allowed hazard types and severities aligned with the frontend report form.
 - Strict report schema.
 - Owner-only likes, views, comments, and userReports.
+- User flag documents are one per user per report, and users cannot flag their own reports.
 - No client writes to notification documents except admin roles.
 - No client writes to moderation logs except admin roles.
 - User profile reads restricted to owner.
@@ -1108,7 +1110,7 @@ Latest documents are used for realtime UI. Records are used for historical sourc
 | --- | --- | --- |
 | `onReportCreated` | `Reports/{reportId}` create | Create notification and send FCM topic. |
 | `onReportRemoved` | `Reports/{reportId}` update | Clean report media and notify reporter. |
-| `onReportDeleted` | `Reports/{reportId}` delete | Clean report media. |
+| `onReportDeleted` | `Reports/{reportId}` delete | Clean report media, engagement subcollections, and report notifications. |
 | `onReportLikeCreated/Deleted` | likes subcollection | Maintain `likeCount`. |
 | `onReportCommentCreated/Deleted` | comments subcollection | Maintain `commentCount`. |
 | `onReportViewCreated` | userViews subcollection | Maintain `viewCount`. |
@@ -1243,7 +1245,7 @@ firebase deploy --only functions,firestore:rules,firestore:indexes,storage
 | Area | Limitation |
 | --- | --- |
 | Firestore report feed | Current queries pull newest reports and filter some fields client-side. |
-| Moderation rule | Auto-removal ratio is simple and may need stronger trust modeling. |
+| Moderation rule | Auto-removal uses a fixed five-unique-user threshold and may need stronger trust modeling. |
 | In-memory rate limiting | Works for one backend instance but does not coordinate across multiple instances. |
 | Leaflet WebView | Very high marker counts may require server-side tiling or viewport queries. |
 | Official source scraping | HTML/source changes can break parsers. |

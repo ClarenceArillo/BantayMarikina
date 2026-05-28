@@ -22,6 +22,7 @@ import { ReportFilterBar } from '@/components/ReportFilterBar';
 import { useAuthSession } from '@/context/auth-context';
 import { useHazardReports } from '@/hooks/useHazardReports';
 import { useLiveLocation } from '@/hooks/useLiveLocation';
+import { API_BASE_URL } from '@/services/authService';
 import { ensureFirebaseSession } from '@/services/firebaseSession';
 import { submitHazardReport } from '@/services/hazardReportService';
 import { navigateMainTab } from '@/services/mainTabNavigation';
@@ -100,7 +101,19 @@ export default function ReportScreen() {
       setIsSubmitting(true);
       const currentLocation = location || (await locateOnce());
 
-      await ensureFirebaseSession(session?.idToken);
+      const firebaseUid = await ensureFirebaseSession(session?.idToken);
+      console.log('[report-screen] submitting hazard report', {
+        apiBaseUrl: API_BASE_URL,
+        appSessionUid: session?.uid || null,
+        firebaseUid,
+        hasBackendIdToken: Boolean(session?.idToken),
+        location: {
+          accuracy: currentLocation.coords.accuracy,
+          latitude: currentLocation.coords.latitude,
+          longitude: currentLocation.coords.longitude,
+        },
+        at: new Date().toISOString(),
+      });
       await submitHazardReport({
         hazardType,
         severity,
@@ -110,7 +123,7 @@ export default function ReportScreen() {
         accuracyMeters: currentLocation.coords.accuracy,
         barangay,
         idToken: session?.idToken,
-        userId: session?.uid,
+        userId: firebaseUid,
         reporterName: session?.full_name,
         reporterPhotoUrl: session?.profile?.profilePhotoUrl || session?.profile?.profile_photo_url || session?.profile?.photoURL,
         imageUri: imageUri || undefined,

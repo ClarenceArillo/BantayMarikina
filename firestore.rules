@@ -48,6 +48,34 @@ service cloud.firestore {
         && request.resource.data.longitude <= 121.18;
     }
 
+    function validHazardType(value) {
+      return value in [
+        'Flood',
+        'Fire',
+        'Landslide',
+        'Earthquake Damage',
+        'Earthquake',
+        'Typhoon',
+        'Extreme Heat',
+        'High Water Level',
+        'Road Blockage',
+        'Power Outage',
+        'Others'
+      ];
+    }
+
+    function validSeverity(value) {
+      return value in ['Low', 'Moderate', 'High', 'Critical'];
+    }
+
+    function validExistingReportForEngagement(reportId) {
+      let reportPath = /databases/$(database)/documents/Reports/$(reportId);
+      let report = get(reportPath);
+      return exists(reportPath)
+        && report.data.status == 'active'
+        && report.data.moderationStatus == 'visible';
+    }
+
     function validHazardReport() {
       return request.resource.data.keys().hasOnly([
           'title',
@@ -81,7 +109,9 @@ service cloud.firestore {
           'updatedAt'
         ])
         && request.resource.data.keys().hasAll([
+          'title',
           'hazardType',
+          'hazard_type',
           'description',
           'latitude',
           'longitude',
@@ -93,17 +123,11 @@ service cloud.firestore {
           'createdAt',
           'updatedAt'
         ])
-        && request.resource.data.hazardType in [
-          'Flood',
-          'Fire',
-          'Landslide',
-          'Earthquake Damage',
-          'Road Blockage',
-          'Power Outage',
-          'Others'
-        ]
+        && isCleanText(request.resource.data.title, 3, 120)
+        && validHazardType(request.resource.data.hazardType)
+        && request.resource.data.hazard_type == request.resource.data.hazardType
         && isCleanText(request.resource.data.description, 8, 240)
-        && request.resource.data.severity in ['Low', 'Moderate', 'High', 'Critical']
+        && validSeverity(request.resource.data.severity)
         && request.resource.data.status == 'active'
         && request.resource.data.source == 'community'
         && request.resource.data.moderationStatus == 'visible'
@@ -111,6 +135,7 @@ service cloud.firestore {
         && request.resource.data.commentCount == 0
         && request.resource.data.viewCount == 0
         && request.resource.data.userReportCount == 0
+        && validTimestamp(request.resource.data.timestamp)
         && validTimestamp(request.resource.data.createdAt)
         && validTimestamp(request.resource.data.updatedAt)
         && validMarikinaPoint();
@@ -177,11 +202,12 @@ service cloud.firestore {
             'updatedAt'
           ])
         );
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isOwner(resource.data.userId);
 
       match /likes/{userId} {
         allow read: if signedIn();
         allow create: if isOwner(userId)
+          && validExistingReportForEngagement(reportId)
           && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
           && request.resource.data.userId == userId
           && validTimestamp(request.resource.data.createdAt);
@@ -192,6 +218,7 @@ service cloud.firestore {
       match /comments/{commentId} {
         allow read: if signedIn();
         allow create: if isOwner(request.resource.data.userId)
+          && validExistingReportForEngagement(reportId)
           && request.resource.data.keys().hasOnly(['userId', 'userName', 'userPhotoUrl', 'body', 'createdAt'])
           && isCleanText(request.resource.data.userName, 1, 60)
           && isCleanText(request.resource.data.body, 2, 400)
@@ -204,6 +231,7 @@ service cloud.firestore {
       match /userViews/{userId} {
         allow read: if signedIn();
         allow create: if isOwner(userId)
+          && validExistingReportForEngagement(reportId)
           && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
           && request.resource.data.userId == userId
           && validTimestamp(request.resource.data.createdAt);
@@ -211,8 +239,10 @@ service cloud.firestore {
       }
 
       match /userReports/{userId} {
-        allow read: if signedIn() && request.auth.uid == userId;
+        allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
         allow create: if isOwner(userId)
+          && validExistingReportForEngagement(reportId)
+          && get(/databases/$(database)/documents/Reports/$(reportId)).data.userId != userId
           && request.resource.data.keys().hasOnly(['userId', 'category', 'note', 'createdAt'])
           && request.resource.data.userId == userId
           && request.resource.data.category in [
