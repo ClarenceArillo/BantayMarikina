@@ -48,9 +48,19 @@ const MARIKINA_BOUNDS = {
 const RECENT_REPORT_COOLDOWN_MS = 60_000;
 const recentSubmitChecks = new Map<string, number>();
 const engagementWriteLocks = new Map<string, Promise<void>>();
+const DEBUG_HAZARD_REPORT_SUBMIT = false;
 
 function logReportTrace(message: string, meta: Record<string, unknown> = {}) {
+  if (!DEBUG_HAZARD_REPORT_SUBMIT) return;
+
   console.log('[hazard-report-submit]', message, {
+    at: new Date().toISOString(),
+    ...meta,
+  });
+}
+
+function warnReportTrace(message: string, meta: Record<string, unknown> = {}) {
+  console.warn('[hazard-report-submit]', message, {
     at: new Date().toISOString(),
     ...meta,
   });
@@ -372,7 +382,34 @@ function severityRank(severity?: string) {
   return 0;
 }
 
+function notificationDateBucketRank(date: Date | null) {
+  if (!date) return 0;
+
+  const now = new Date();
+  const startToday = new Date(now);
+  startToday.setHours(0, 0, 0, 0);
+
+  const startYesterday = new Date(startToday);
+  startYesterday.setDate(startYesterday.getDate() - 1);
+
+  const startWeek = new Date(startToday);
+  startWeek.setDate(startToday.getDate() - ((startToday.getDay() || 7) - 1));
+
+  const startMonth = new Date(startToday.getFullYear(), startToday.getMonth(), 1);
+  const startYear = new Date(startToday.getFullYear(), 0, 1);
+
+  if (date >= startToday) return 0;
+  if (date >= startYesterday) return 1;
+  if (date >= startWeek) return 2;
+  if (date >= startMonth) return 3;
+  if (date >= startYear) return 4;
+  return 5;
+}
+
 function sortNotifications(a: ReportNotification, b: ReportNotification) {
+  const bucketDiff = notificationDateBucketRank(a.createdAt) - notificationDateBucketRank(b.createdAt);
+  if (bucketDiff !== 0) return bucketDiff;
+
   const severityDiff = severityRank(b.severity) - severityRank(a.severity);
   if (severityDiff !== 0) return severityDiff;
 
@@ -436,14 +473,14 @@ export async function submitHazardReport(input: HazardReportInput) {
   const { auth, db } = getFirebaseClients();
   const authoritativeUserId = getAuthoritativeFirebaseUid(input.userId);
   await auth.currentUser?.getIdToken(true).catch((error) => {
-    logReportTrace('unable to force-refresh Firebase token before submit', {
+    warnReportTrace('unable to force-refresh Firebase token before submit', {
       firebaseUid: auth.currentUser?.uid || null,
       error: error instanceof Error ? error.message : String(error),
     });
     throw error;
   });
   const firebaseTokenResult = await auth.currentUser?.getIdTokenResult().catch((error) => {
-    logReportTrace('unable to read Firebase token before submit', {
+    warnReportTrace('unable to read Firebase token before submit', {
       firebaseUid: auth.currentUser?.uid || null,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -467,7 +504,7 @@ export async function submitHazardReport(input: HazardReportInput) {
       lastReportAt: lastReportAt?.toISOString() || null,
     });
   } catch {
-    logReportTrace('unable to read report submission guard; relying on server rules', {
+    warnReportTrace('unable to read report submission guard; relying on server rules', {
       path: `${REPORT_SUBMISSION_GUARDS_COLLECTION}/${authoritativeUserId}`,
     });
     // Guard reads are a throttle optimization. Server rules still enforce the cooldown.
@@ -568,7 +605,7 @@ export async function submitHazardReport(input: HazardReportInput) {
     });
     return reportRef;
   } catch (error) {
-    logReportTrace('report batch failed', {
+    warnReportTrace('report batch failed', {
       authUid: auth.currentUser?.uid || null,
       callerUserId: input.userId || null,
       code: typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: unknown }).code : null,

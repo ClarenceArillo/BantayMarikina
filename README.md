@@ -55,3 +55,4 @@ firebase deploy --only firestore:rules,firestore:indexes,storage,functions
 - Do not commit `backend/.env`, `frontend/.env`, or `backend/serviceAccountKey.json`.
 - Cloudinary API secrets belong only in backend/Firebase Functions environments.
 - Firestore rules and Cloud Functions must match the current frontend write flow because aggregate counters and moderation are server-owned.
+- Notifications are shown in date-bucket order: Today, Yesterday, This Week, This Month, This Year, then Older; alert priority is used inside each bucket.

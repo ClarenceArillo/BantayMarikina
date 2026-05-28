@@ -254,6 +254,8 @@ Notifications are grouped by date buckets and filtered by:
 - Status.
 - Source.
 
+The notification list is ordered by date bucket first: Today, Yesterday, This Week, This Month, This Year, then Older. Within each bucket, severity, magnitude, intensity/signal level, and creation time are used as tie-breakers.
+
 The screen maintains read/unread state through `NotificationReads`.
 
 #### Profile: `frontend/app/profile.tsx`
@@ -571,9 +573,9 @@ This avoids mutating shared notification documents and scales better when many u
 - `NotificationReads` for the current user.
 - Reports in the selected date window to enrich notification cards with current report status.
 
-It merges, deduplicates, filters, sorts, and emits the final notification list. When users select **This Year**, Firestore queries are bounded from January 1 of the current year onward so annual community and official alert history can be reviewed instead of only the newest page of notifications.
+It merges, deduplicates, filters, sorts, and emits the final notification list. The sort keeps the newest date buckets first in the order Today, Yesterday, This Week, This Month, This Year, then Older; priority fields such as severity, magnitude, and intensity are applied within the same bucket. When users select **This Year**, Firestore queries are bounded from January 1 of the current year onward so annual community and official alert history can be reviewed instead of only the newest page of notifications.
 
-Official alerts are intentionally filtered so only actionable records surface to users: `official_alert` documents with `shouldNotify === false` are suppressed. The client sorts the remaining notifications by stored severity, magnitude, and intensity so highest-priority alerts rise first.
+Official alerts are intentionally filtered so only actionable records surface to users: `official_alert` documents with `shouldNotify === false` are suppressed. The client keeps those alerts in the same date-bucket order as community notifications while still using stored severity, magnitude, and intensity to rank items inside each bucket.
 
 ### FCM Integration
 

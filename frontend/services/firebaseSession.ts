@@ -5,6 +5,7 @@ import { getFirebaseCustomToken } from '@/services/authService';
 
 let sessionPromise: Promise<string> | null = null;
 let activeBackendToken: string | null = null;
+const DEBUG_FIREBASE_SESSION = false;
 
 function tokenFingerprint(token?: string | null) {
   if (!token) return 'none';
@@ -12,6 +13,8 @@ function tokenFingerprint(token?: string | null) {
 }
 
 function logFirebaseSessionTrace(message: string, meta: Record<string, unknown> = {}) {
+  if (!DEBUG_FIREBASE_SESSION) return;
+
   console.log('[firebase-session]', message, {
     at: new Date().toISOString(),
     ...meta,
@@ -27,16 +30,9 @@ export async function ensureFirebaseSession(idToken?: string | null) {
 
   if (auth.currentUser && activeBackendToken === idToken) {
     try {
-      const tokenResult = await auth.currentUser.getIdTokenResult();
-      logFirebaseSessionTrace('reusing Firebase Auth session', {
-        backendToken: tokenFingerprint(idToken),
-        firebaseUid: auth.currentUser.uid,
-        firebaseTokenExpirationTime: tokenResult.expirationTime,
-        firebaseTokenIssuedAtTime: tokenResult.issuedAtTime,
-        providerId: auth.currentUser.providerId,
-      });
+      await auth.currentUser.getIdTokenResult();
     } catch (error) {
-      logFirebaseSessionTrace('refreshing stale Firebase Auth session', {
+      console.warn('[firebase-session] refreshing stale Firebase Auth session', {
         backendToken: tokenFingerprint(idToken),
         firebaseUid: auth.currentUser.uid,
         error: error instanceof Error ? error.message : String(error),
@@ -70,7 +66,7 @@ export async function ensureFirebaseSession(idToken?: string | null) {
         sessionPromise = null;
       }
 
-      logFirebaseSessionTrace('failed to establish Firebase Auth session', {
+      console.warn('[firebase-session] failed to establish Firebase Auth session', {
         backendToken: tokenFingerprint(idToken),
         error: error instanceof Error ? error.message : String(error),
       });

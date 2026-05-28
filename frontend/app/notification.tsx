@@ -12,6 +12,8 @@ import { markNotificationRead } from '@/services/hazardReportService';
 import { navigateMainTab } from '@/services/mainTabNavigation';
 import type { ReportFilters, ReportNotification } from '@/types/hazard';
 
+const NOTIFICATION_BUCKETS = ['Today', 'Yesterday', 'This Week', 'This Month', 'This Year', 'Older'] as const;
+
 function dateBucket(date: Date | null) {
   if (!date) return 'Today';
   const now = new Date();
@@ -26,25 +28,22 @@ function dateBucket(date: Date | null) {
 
   if (date >= startToday) return 'Today';
   if (date >= startYesterday) return 'Yesterday';
-  if (date >= startWeek) return 'Earlier This Week';
-  if (date >= startMonth) return 'Earlier This Month';
-  if (date >= startYear) return 'Earlier This Year';
+  if (date >= startWeek) return 'This Week';
+  if (date >= startMonth) return 'This Month';
+  if (date >= startYear) return 'This Year';
   return 'Older';
 }
 
 function groupNotifications(notifications: ReportNotification[]) {
-  return notifications.reduce<{ title: string; items: ReportNotification[] }[]>((groups, notification) => {
+  const groupsByTitle = notifications.reduce<Map<string, ReportNotification[]>>((groups, notification) => {
     const title = dateBucket(notification.createdAt);
-    const group = groups.find((item) => item.title === title);
-
-    if (group) {
-      group.items.push(notification);
-    } else {
-      groups.push({ title, items: [notification] });
-    }
-
+    groups.set(title, [...(groups.get(title) || []), notification]);
     return groups;
-  }, []);
+  }, new Map());
+
+  return NOTIFICATION_BUCKETS
+    .map((title) => ({ title, items: groupsByTitle.get(title) || [] }))
+    .filter((group) => group.items.length > 0);
 }
 
 function activeFilterCount(filters: ReportFilters) {

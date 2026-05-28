@@ -356,7 +356,7 @@ After setup, verify these flows:
 5. Submit a hazard report with GPS.
 6. Submit a hazard report with image or video media.
 7. Confirm the report appears on Map and Home preview.
-8. Open Notifications and confirm the new report notification appears.
+8. Open Notifications and confirm the new report notification appears under the correct date bucket order: Today, Yesterday, This Week, This Month, then older sections.
 9. Open a report detail sheet and test like/comment/view behavior.
 10. Upload a profile photo.
 11. Change username.
