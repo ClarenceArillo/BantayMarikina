@@ -92,6 +92,12 @@ function getPagasaSeverity(stage) {
   return 'Moderate';
 }
 
+function getPagasaSignalLevel(stage) {
+  if (stage === 'TY' || stage === 'STY') return 5;
+  if (stage === 'STS' || stage === 'TS') return 4;
+  return 2;
+}
+
 async function fetchLatestPagasaAlert() {
   const [metaResponse, cycloneResponse] = await Promise.all([
     httpClient.get(PAGASA_META_URL),
@@ -102,8 +108,11 @@ async function fetchLatestPagasaAlert() {
   const issuedAt = parsePagasaIssuedAt(metaText) || new Date();
   const stormName = parsePagasaStormName(metaText);
   const cyclone = parseCycloneDat(cycloneText);
+  if (!cyclone) return null;
+
   const eventId = hash(`${stormName}|${issuedAt.toISOString()}|${cycloneText.slice(0, 160)}`);
   const severity = getPagasaSeverity(cyclone?.stage);
+  const signalLevel = getPagasaSignalLevel(cyclone?.stage);
   const stageLabel = cyclone?.stage ? `${cyclone.stage} ` : '';
 
   return {
@@ -111,9 +120,11 @@ async function fetchLatestPagasaAlert() {
     officialEventId: eventId,
     hazardType: 'Typhoon',
     severity,
+    signalLevel,
+    intensity: signalLevel,
     sourceLabel: 'ADMIN VERIFIED',
     title: `${stageLabel}Typhoon Warning Issued`,
-    body: `${stormName} bulletin from DOST-PAGASA${cyclone ? ` near ${cyclone.latitude.toFixed(1)}°N, ${cyclone.longitude.toFixed(1)}°E` : ''}. Monitor official advisories and prepare for strong rain or wind conditions.`,
+    body: `${stormName} bulletin from DOST-PAGASA near ${cyclone.latitude.toFixed(1)}°N, ${cyclone.longitude.toFixed(1)}°E. Marikina signal level: Tropical Cyclone Wind Signal No. ${signalLevel}. Monitor official advisories and prepare for strong rain or wind conditions.`,
     safetyTip: 'Stay indoors, charge devices, and avoid flooded roads.',
     affectedArea: 'Philippines / Marikina City monitoring',
     provider: 'DOST-PAGASA',
@@ -180,15 +191,19 @@ async function fetchLatestPhivolcsAlert() {
   const event = parsePhivolcsLatestEvent(String(response.data || ''));
   if (!event) throw new Error('Unable to parse PHIVOLCS latest earthquake table.');
 
+  const severity = getEarthquakeSeverity(event.magnitude);
   const eventId = hash(`${event.dateTimeText}|${event.latitude}|${event.longitude}|${event.depth}|${event.magnitude}|${event.location}`);
   return {
     officialAlertKey: 'latest-phivolcs-earthquake',
     officialEventId: eventId,
     hazardType: 'Earthquake',
-    severity: getEarthquakeSeverity(event.magnitude),
+    severity,
+    magnitude: event.magnitude,
+    intensity: event.magnitude,
+    signalLevel: event.magnitude >= 4 ? 3 : 1,
     sourceLabel: 'ADMIN VERIFIED',
     title: `Magnitude ${event.magnitude.toFixed(1)} Earthquake Detected`,
-    body: `PHIVOLCS recorded a magnitude ${event.magnitude.toFixed(1)} earthquake ${event.location}. Depth: ${Number.isFinite(event.depth) ? `${event.depth} km` : 'not available'}.`,
+    body: `PHIVOLCS recorded a magnitude ${event.magnitude.toFixed(1)} earthquake ${event.location}. Depth: ${Number.isFinite(event.depth) ? `${event.depth} km` : 'not available'}. Marikina should monitor shaking and follow local advisories.`,
     safetyTip: 'Drop, Cover, and Hold. Stay away from windows and heavy objects.',
     affectedArea: event.location || 'Philippines / Marikina City monitoring',
     latitude: event.latitude,
@@ -214,6 +229,11 @@ async function runPoll(source, fn, baseIntervalMs) {
   state.running = true;
   try {
     const alert = await fn();
+    if (!alert) {
+      state.failures = 0;
+      return;
+    }
+
     if (alert.officialEventId !== state.lastEventId) {
       await upsertLatestOfficialHazardAlert(alert);
       state.lastEventId = alert.officialEventId;

@@ -182,7 +182,7 @@ firebase deploy --only storage
 firebase deploy --only functions
 ```
 
-Important: deploy `functions` together with the latest `firestore.rules` when using the current app. The frontend now writes only user-owned interaction documents for likes, comments, views, and flags. Cloud Functions maintain trusted aggregate counters and moderation state.
+Important: deploy `functions` together with the latest `firestore.rules` when using the current app. The frontend now writes only user-owned interaction documents for likes, comments, views, and flags. Cloud Functions maintain trusted aggregate counters, owner-delete cleanup, and moderation state.
 
 ### Current Security Model
 
@@ -193,7 +193,7 @@ Important: deploy `functions` together with the latest `firestore.rules` when us
 | Comments | Authenticated users create sanitized comments with guard-based cooldown. |
 | Likes/views | One document per user per report. |
 | Notifications | Created by trusted backend/functions, read by permitted audience. |
-| Moderation | User flag docs are client-writable, but moderation counters/actions are function-owned. |
+| Moderation | User flag docs are client-writable once per user per report, but moderation counters/actions are function-owned. A report is auto-taken down after five different users flag it. |
 | Profile media | Cloudinary asset must belong to the signed-in user. |
 | Storage | Firebase Storage is locked to owner-owned image paths if used. |
 

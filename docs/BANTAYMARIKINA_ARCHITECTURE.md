@@ -47,7 +47,7 @@ The project goal is to provide fast situational awareness while keeping the app 
 - Community hazard reporting with GPS, image/video capture, Cloudinary upload, and Firestore persistence.
 - Realtime notifications for community reports, official alerts, and moderation outcomes.
 - Social interactions: likes, comments, views, and community flagging.
-- Auto-moderation based on report-to-view ratio.
+- Auto-moderation after five different authenticated users flag the same report.
 - Profile photo uploads and profile updates.
 - Dark mode and themed UI primitives.
 - Backend polling for official sources and dashboard data.
@@ -248,7 +248,7 @@ The Report screen allows residents to submit a hazard. It:
 
 Notifications are grouped by date buckets and filtered by:
 
-- Date range.
+- Date range, including a current-year window for annual alert review.
 - Hazard type.
 - Severity.
 - Status.
@@ -469,7 +469,7 @@ This keeps bandwidth low and improves image rendering performance. Videos use ge
 
 ### Cleanup
 
-Cloud Functions clean up report media when reports are deleted or moderated out. Profile photo replacement returns the previous `public_id`, and the frontend asks the backend to delete it.
+Cloud Functions clean up report media when reports are deleted or moderated out. When an owner deletes a report, Cloud Functions also remove the report's engagement subcollections and related notification documents. Profile photo replacement returns the previous `public_id`, and the frontend asks the backend to delete it.
 
 ---
 
@@ -569,9 +569,11 @@ This avoids mutating shared notification documents and scales better when many u
 - Public notifications where `audience == "all"`.
 - User notifications where `recipientId == userId`.
 - `NotificationReads` for the current user.
-- Recent reports to enrich notification cards with current report status.
+- Reports in the selected date window to enrich notification cards with current report status.
 
-It merges, deduplicates, filters, sorts, and emits the final notification list.
+It merges, deduplicates, filters, sorts, and emits the final notification list. When users select **This Year**, Firestore queries are bounded from January 1 of the current year onward so annual community and official alert history can be reviewed instead of only the newest page of notifications.
+
+Official alerts are intentionally filtered so only actionable records surface to users: `official_alert` documents with `shouldNotify === false` are suppressed. The client sorts the remaining notifications by stored severity, magnitude, and intensity so highest-priority alerts rise first.
 
 ### FCM Integration
 
@@ -611,7 +613,11 @@ Official alert documents are deterministic:
 official_{officialAlertKey}_{officialEventId}
 ```
 
-For latest alert streams, old documents with the same `officialAlertKey` are deleted so the notification list does not accumulate duplicate "latest" alerts from the same source.
+For latest alert streams, each source event uses a deterministic document id so duplicate polls update the same notification while separate events remain available for annual review. The backend also prunes official alerts older than the current year, keeping the active Firestore history aligned to the current annual period.
+
+Each official alert stores normalized `severity`, `signalLevel`, `magnitude`, `intensity`, and `shouldNotify` metadata so the UI can render the correct urgency and hide non-actionable advisories.
+
+PAGASA typhoon alerts are skipped when no active cyclone feed record is available, and active alerts include the local Marikina Tropical Cyclone Wind Signal level inside the alert body. PHIVOLCS earthquake alerts include magnitude/intensity context for Marikina monitoring.
 
 ### Manual Official Alerts
 
@@ -715,10 +721,10 @@ When a user flags a report, Cloud Functions:
 2. Updates category counts.
 3. Increments `userReportCount`.
 4. Computes the dominant category.
-5. Compares `userReportCount / viewCount`.
-6. Auto-removes the report if the ratio is greater than 0.5.
+5. Auto-removes the report when five different users have flagged it.
+6. Stores the dominant category as `removedReason`.
 7. Writes a moderation log.
-8. Lets `onReportRemoved` notify the original reporter.
+8. Lets `onReportRemoved` notify the original reporter with an `ADMIN/OFFICIAL` label and the removal reason/category.
 
 This keeps moderation-sensitive state out of direct client control.
 
@@ -734,10 +740,12 @@ Security is layered across frontend validation, backend validation, Firestore ru
 
 - Signed-in users only for report and notification reads.
 - Owner-only report creation.
+- Owner-only report deletion, with trusted Cloud Functions cleanup for report subcollections and related notifications.
 - Marikina coordinate bounds.
-- Allowed hazard types and severities.
+- Allowed hazard types and severities aligned with the frontend report form.
 - Strict report schema.
 - Owner-only likes, views, comments, and userReports.
+- User flag documents are one per user per report, and users cannot flag their own reports.
 - No client writes to notification documents except admin roles.
 - No client writes to moderation logs except admin roles.
 - User profile reads restricted to owner.
@@ -1102,7 +1110,7 @@ Latest documents are used for realtime UI. Records are used for historical sourc
 | --- | --- | --- |
 | `onReportCreated` | `Reports/{reportId}` create | Create notification and send FCM topic. |
 | `onReportRemoved` | `Reports/{reportId}` update | Clean report media and notify reporter. |
-| `onReportDeleted` | `Reports/{reportId}` delete | Clean report media. |
+| `onReportDeleted` | `Reports/{reportId}` delete | Clean report media, engagement subcollections, and report notifications. |
 | `onReportLikeCreated/Deleted` | likes subcollection | Maintain `likeCount`. |
 | `onReportCommentCreated/Deleted` | comments subcollection | Maintain `commentCount`. |
 | `onReportViewCreated` | userViews subcollection | Maintain `viewCount`. |
@@ -1237,7 +1245,7 @@ firebase deploy --only functions,firestore:rules,firestore:indexes,storage
 | Area | Limitation |
 | --- | --- |
 | Firestore report feed | Current queries pull newest reports and filter some fields client-side. |
-| Moderation rule | Auto-removal ratio is simple and may need stronger trust modeling. |
+| Moderation rule | Auto-removal uses a fixed five-unique-user threshold and may need stronger trust modeling. |
 | In-memory rate limiting | Works for one backend instance but does not coordinate across multiple instances. |
 | Leaflet WebView | Very high marker counts may require server-side tiling or viewport queries. |
 | Official source scraping | HTML/source changes can break parsers. |

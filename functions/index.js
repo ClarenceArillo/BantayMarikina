@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const { FieldValue } = require('firebase-admin/firestore');
 const { onDocumentCreated, onDocumentDeleted, onDocumentUpdated } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 
@@ -14,6 +15,8 @@ const MODERATION_CATEGORIES = [
   'spam',
   'other',
 ];
+const AUTO_TAKEDOWN_FLAG_THRESHOLD = 5;
+const REPORT_SUBCOLLECTIONS = ['likes', 'comments', 'userViews', 'userReports'];
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -40,12 +43,61 @@ function getDominantCategory(categories) {
 async function updateReportCounter(reportId, field, delta) {
   if (!reportId || !Number.isFinite(delta) || delta === 0) return;
 
-  await db.collection('Reports').doc(reportId).update({
-    [field]: admin.firestore.FieldValue.increment(delta),
-    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  const reportRef = db.collection('Reports').doc(reportId);
+  await db.runTransaction(async (transaction) => {
+    const reportSnapshot = await transaction.get(reportRef);
+    if (!reportSnapshot.exists) return;
+
+    transaction.update(reportRef, {
+      [field]: FieldValue.increment(delta),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   }).catch((error) => {
     logger.warn('Unable to update report counter', { reportId, field, error: error.message });
   });
+}
+
+async function deleteQuerySnapshotInBatches(query, label) {
+  let snapshot = await query.limit(400).get();
+
+  while (!snapshot.empty) {
+    const batch = db.batch();
+    snapshot.docs.forEach((documentSnapshot) => batch.delete(documentSnapshot.ref));
+    await batch.commit();
+    logger.info('Deleted related Firestore documents', { label, count: snapshot.size });
+    snapshot = await query.limit(400).get();
+  }
+}
+
+async function cleanupReportNotifications(reportId) {
+  let snapshot = await db.collection('Notifications').where('reportId', '==', reportId).limit(400).get();
+
+  while (!snapshot.empty) {
+    const notificationIds = snapshot.docs.map((documentSnapshot) => documentSnapshot.id);
+    const batch = db.batch();
+    snapshot.docs.forEach((documentSnapshot) => batch.delete(documentSnapshot.ref));
+    await batch.commit();
+
+    await Promise.all(notificationIds.map((notificationId) => deleteQuerySnapshotInBatches(
+      db.collection('NotificationReads').where('notificationId', '==', notificationId),
+      `NotificationReads notificationId=${notificationId}`
+    )));
+
+    logger.info('Deleted related notification documents', { reportId, count: snapshot.size });
+    snapshot = await db.collection('Notifications').where('reportId', '==', reportId).limit(400).get();
+  }
+}
+
+async function cleanupReportFirestoreData(reportId) {
+  if (!reportId) return;
+
+  await Promise.all([
+    ...REPORT_SUBCOLLECTIONS.map((collectionName) => deleteQuerySnapshotInBatches(
+      db.collection('Reports').doc(reportId).collection(collectionName),
+      `Reports/${reportId}/${collectionName}`
+    )),
+    cleanupReportNotifications(reportId),
+  ]);
 }
 
 function getCloudinaryConfig() {
@@ -170,7 +222,7 @@ exports.onReportCreated = onDocumentCreated('Reports/{reportId}', async (event) 
     longitude: report.longitude || null,
     barangay: cleanText(report.barangay, '', 80),
     reporterName: cleanText(report.reporterName, 'Resident', 80),
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
   }, { merge: true });
 });
 
@@ -212,9 +264,8 @@ exports.onUserReportCreated = onDocumentCreated('Reports/{reportId}/userReports/
       [category]: (reportData.reportCategoryCounts?.[category] || 0) + 1,
     };
     const nextReportCount = (reportData.userReportCount || 0) + 1;
-    const viewCount = Math.max(reportData.viewCount || 0, 1);
     const dominantCategory = getDominantCategory(categoryCounts);
-    const shouldRemove = nextReportCount / viewCount > 0.5;
+    const shouldRemove = nextReportCount >= AUTO_TAKEDOWN_FLAG_THRESHOLD;
 
     transaction.update(reportRef, {
       userReportCount: nextReportCount,
@@ -222,7 +273,7 @@ exports.onUserReportCreated = onDocumentCreated('Reports/{reportId}/userReports/
       moderationStatus: shouldRemove ? 'removed' : reportData.moderationStatus || 'visible',
       status: shouldRemove ? 'rejected' : reportData.status || 'active',
       removedReason: shouldRemove ? dominantCategory : reportData.removedReason || null,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
 
     if (shouldRemove && reportData.moderationStatus !== 'removed' && reportData.status !== 'rejected') {
@@ -230,11 +281,11 @@ exports.onUserReportCreated = onDocumentCreated('Reports/{reportId}/userReports/
         reportId: event.params.reportId,
         reporterId: reportData.userId || null,
         reportCount: nextReportCount,
-        uniqueViews: viewCount,
+        threshold: AUTO_TAKEDOWN_FLAG_THRESHOLD,
         dominantCategory,
         categoryCounts,
         action: 'auto_removed',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
       });
     }
   }).catch((error) => {
@@ -265,11 +316,17 @@ exports.onReportRemoved = onDocumentUpdated('Reports/{reportId}', async (event) 
     recipientId: after.userId,
     type: 'moderation_removed',
     reportId: event.params.reportId,
-    title: 'Report removed',
-    body: `Your report has been removed due to multiple community reports for ${categoryLabel(dominantCategory)}.`,
+    title: 'ADMIN/OFFICIAL: Report removed',
+    body: `Your report was taken down after 5 different users reported it. Reason: ${categoryLabel(dominantCategory)}.`,
     hazardType: after.hazardType || after.hazard_type || 'Hazard',
     severity: after.severity || 'Moderate',
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    source: 'admin',
+    sourceLabel: 'ADMIN/OFFICIAL',
+    priority: 'high',
+    moderationReason: dominantCategory,
+    moderationReasonLabel: categoryLabel(dominantCategory),
+    reportCategoryCounts: after.reportCategoryCounts || {},
+    createdAt: FieldValue.serverTimestamp(),
   });
 });
 
@@ -279,5 +336,12 @@ exports.onReportDeleted = onDocumentDeleted('Reports/{reportId}', async (event) 
 
   await cleanupReportMedia(report).catch((error) => {
     logger.warn('Unable to clean Cloudinary media for deleted report', error);
+  });
+
+  await cleanupReportFirestoreData(event.params.reportId).catch((error) => {
+    logger.warn('Unable to clean Firestore data for deleted report', {
+      reportId: event.params.reportId,
+      error: error.message,
+    });
   });
 });

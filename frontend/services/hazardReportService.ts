@@ -16,6 +16,7 @@ import {
   where,
   type DocumentData,
   type FirestoreError,
+  type QueryConstraint,
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from 'firebase/firestore';
@@ -48,6 +49,34 @@ const RECENT_REPORT_COOLDOWN_MS = 60_000;
 const recentSubmitChecks = new Map<string, number>();
 const engagementWriteLocks = new Map<string, Promise<void>>();
 
+function logReportTrace(message: string, meta: Record<string, unknown> = {}) {
+  console.log('[hazard-report-submit]', message, {
+    at: new Date().toISOString(),
+    ...meta,
+  });
+}
+
+function summarizeValue(value: unknown): unknown {
+  if (value instanceof Timestamp) return 'timestamp';
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(summarizeValue);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      key.toLowerCase().includes('token') ? '[redacted]' : summarizeValue(item),
+    ])
+  );
+}
+
+function summarizePayload(payload: Record<string, unknown>) {
+  return {
+    keys: Object.keys(payload).sort(),
+    data: summarizeValue(payload),
+  };
+}
+
 function isFirestoreErrorCode(error: unknown, code: string) {
   return typeof error === 'object'
     && error !== null
@@ -78,6 +107,21 @@ function getCurrentFirebaseUid(fallbackUserId?: string) {
 
   if (!firebaseUid) {
     throw new Error('Please sign in before using post engagement.');
+  }
+
+  return firebaseUid;
+}
+
+function getAuthoritativeFirebaseUid(callerUserId?: string) {
+  const { auth } = getFirebaseClients();
+  const firebaseUid = auth.currentUser?.uid;
+
+  if (!firebaseUid) {
+    throw new Error('Please sign in before submitting or managing hazard reports.');
+  }
+
+  if (callerUserId && callerUserId !== firebaseUid) {
+    throw new Error('Your Firebase session does not match the signed-in app user. Please sign out, sign in again, and retry.');
   }
 
   return firebaseUid;
@@ -172,6 +216,10 @@ function normalizeReport(doc: QueryDocumentSnapshot<DocumentData>): HazardReport
     status: data.status || 'active',
     source: data.source || 'community',
     moderationStatus: data.moderationStatus || (data.status === 'rejected' ? 'removed' : 'visible'),
+    magnitude: typeof data.magnitude === 'number' ? data.magnitude : Number.isFinite(Number(data.magnitude)) ? Number(data.magnitude) : undefined,
+    intensity: typeof data.intensity === 'number' ? data.intensity : Number.isFinite(Number(data.intensity)) ? Number(data.intensity) : undefined,
+    signalLevel: typeof data.signalLevel === 'number' ? data.signalLevel : Number.isFinite(Number(data.signalLevel)) ? Number(data.signalLevel) : undefined,
+    shouldNotify: typeof data.shouldNotify === 'boolean' ? data.shouldNotify : undefined,
     likeCount: data.likeCount || 0,
     commentCount: data.commentCount || 0,
     viewCount: data.viewCount || 0,
@@ -199,6 +247,9 @@ function normalizeNotification(
   report?: HazardReport | null
 ): ReportNotification {
   const data = doc.data();
+  const magnitude = typeof data.magnitude === 'number' ? data.magnitude : Number.isFinite(Number(data.magnitude)) ? Number(data.magnitude) : undefined;
+  const intensity = typeof data.intensity === 'number' ? data.intensity : Number.isFinite(Number(data.intensity)) ? Number(data.intensity) : undefined;
+  const signalLevel = typeof data.signalLevel === 'number' ? data.signalLevel : Number.isFinite(Number(data.signalLevel)) ? Number(data.signalLevel) : undefined;
 
   return {
     id: doc.id,
@@ -215,12 +266,18 @@ function normalizeNotification(
     safetyTip: data.safetyTip || data.safety_tip,
     affectedArea: data.affectedArea || data.affected_area || data.barangay,
     priority: data.priority || (data.type === 'official_alert' ? 'high' : 'normal'),
+    magnitude,
+    intensity,
+    signalLevel,
+    shouldNotify: typeof data.shouldNotify === 'boolean' ? data.shouldNotify : undefined,
     imageUrl: data.imageUrl,
     capturedAtLabel: data.capturedAtLabel || data.captured_at_label || report?.capturedAtLabel,
     latitude: data.latitude,
     longitude: data.longitude,
     barangay: data.barangay,
     reporterName: data.reporterName,
+    moderationReason: data.moderationReason,
+    moderationReasonLabel: data.moderationReasonLabel,
     createdAt: toDate(data.createdAt),
     read: readIds.has(doc.id),
     report,
@@ -230,23 +287,23 @@ function normalizeNotification(
 function getDateWindow(filters?: ReportFilters) {
   const now = new Date();
   const start = new Date(now);
-  const end = new Date(now);
 
   if (!filters || filters.dateRange === 'month') {
     start.setDate(1);
     start.setHours(0, 0, 0, 0);
-    return { start, end };
+    return { start, end: null };
   }
 
   if (filters.dateRange === 'today') {
     start.setHours(0, 0, 0, 0);
-    return { start, end };
+    return { start, end: null };
   }
 
   if (filters.dateRange === 'yesterday') {
+    const end = new Date(start);
     start.setDate(start.getDate() - 1);
     start.setHours(0, 0, 0, 0);
-    end.setDate(start.getDate());
+    end.setTime(start.getTime());
     end.setHours(23, 59, 59, 999);
     return { start, end };
   }
@@ -255,13 +312,39 @@ function getDateWindow(filters?: ReportFilters) {
     const day = start.getDay() || 7;
     start.setDate(start.getDate() - day + 1);
     start.setHours(0, 0, 0, 0);
-    return { start, end };
+    return { start, end: null };
+  }
+
+  if (filters.dateRange === 'year') {
+    start.setMonth(0, 1);
+    start.setHours(0, 0, 0, 0);
+    return { start, end: null };
   }
 
   return {
     start: filters.customStart || null,
     end: filters.customEnd || null,
   };
+}
+
+function buildTimeBoundQueryConstraints(
+  dateField: string,
+  filters: ReportFilters | undefined,
+  maxItems: number,
+  includeLimit = true
+) {
+  const window = getDateWindow(filters);
+  const constraints: QueryConstraint[] = [];
+
+  if (window.start) constraints.push(where(dateField, '>=', Timestamp.fromDate(window.start)));
+  if (window.end) constraints.push(where(dateField, '<=', Timestamp.fromDate(window.end)));
+  constraints.push(orderBy(dateField, 'desc'));
+
+  if (includeLimit && filters?.dateRange !== 'year') {
+    constraints.push(limit(maxItems));
+  }
+
+  return constraints;
 }
 
 function matchesFilters(report: HazardReport, filters?: ReportFilters) {
@@ -278,6 +361,28 @@ function matchesFilters(report: HazardReport, filters?: ReportFilters) {
   if (filters?.source && filters.source !== 'All' && report.source !== filters.source) return false;
 
   return true;
+}
+
+function severityRank(severity?: string) {
+  const normalized = String(severity || '').toLowerCase();
+  if (normalized === 'critical') return 4;
+  if (normalized === 'high') return 3;
+  if (normalized === 'moderate') return 2;
+  if (normalized === 'low') return 1;
+  return 0;
+}
+
+function sortNotifications(a: ReportNotification, b: ReportNotification) {
+  const severityDiff = severityRank(b.severity) - severityRank(a.severity);
+  if (severityDiff !== 0) return severityDiff;
+
+  const magnitudeDiff = (Number(b.magnitude) || 0) - (Number(a.magnitude) || 0);
+  if (magnitudeDiff !== 0) return magnitudeDiff;
+
+  const intensityDiff = (Number(b.signalLevel ?? b.intensity) || 0) - (Number(a.signalLevel ?? a.intensity) || 0);
+  if (intensityDiff !== 0) return intensityDiff;
+
+  return (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0);
 }
 
 function matchesNotificationFilters(notification: ReportNotification, filters?: ReportFilters) {
@@ -327,28 +432,49 @@ export function validateHazardReport(input: HazardReportInput) {
 
 export async function submitHazardReport(input: HazardReportInput) {
   validateHazardReport(input);
-  if (!input.userId) {
-    throw new Error('Please sign in before submitting a report.');
-  }
 
-  const { db } = getFirebaseClients();
-  const lastLocalSubmitAt = recentSubmitChecks.get(input.userId) || 0;
+  const { auth, db } = getFirebaseClients();
+  const authoritativeUserId = getAuthoritativeFirebaseUid(input.userId);
+  await auth.currentUser?.getIdToken(true).catch((error) => {
+    logReportTrace('unable to force-refresh Firebase token before submit', {
+      firebaseUid: auth.currentUser?.uid || null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  });
+  const firebaseTokenResult = await auth.currentUser?.getIdTokenResult().catch((error) => {
+    logReportTrace('unable to read Firebase token before submit', {
+      firebaseUid: auth.currentUser?.uid || null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
+  });
+  const lastLocalSubmitAt = recentSubmitChecks.get(authoritativeUserId) || 0;
   if (Date.now() - lastLocalSubmitAt < RECENT_REPORT_COOLDOWN_MS) {
     throw new Error('Please wait a minute before submitting another report.');
   }
 
   let lastReportAt: Date | null = null;
   try {
-    const guardSnapshot = await getDoc(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId));
+    const guardSnapshot = await getDoc(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, authoritativeUserId));
     lastReportAt = guardSnapshot.exists()
       ? toDate(guardSnapshot.data().lastSubmittedAt || guardSnapshot.data().updatedAt)
       : null;
+    logReportTrace('loaded report submission guard', {
+      path: `${REPORT_SUBMISSION_GUARDS_COLLECTION}/${authoritativeUserId}`,
+      exists: guardSnapshot.exists(),
+      guardKeys: guardSnapshot.exists() ? Object.keys(guardSnapshot.data()).sort() : [],
+      lastReportAt: lastReportAt?.toISOString() || null,
+    });
   } catch {
+    logReportTrace('unable to read report submission guard; relying on server rules', {
+      path: `${REPORT_SUBMISSION_GUARDS_COLLECTION}/${authoritativeUserId}`,
+    });
     // Guard reads are a throttle optimization. Server rules still enforce the cooldown.
   }
 
   if (lastReportAt && Date.now() - lastReportAt.getTime() < RECENT_REPORT_COOLDOWN_MS) {
-    recentSubmitChecks.set(input.userId, lastReportAt.getTime());
+    recentSubmitChecks.set(authoritativeUserId, lastReportAt.getTime());
     throw new Error('Please wait a minute before submitting another report.');
   }
 
@@ -382,8 +508,8 @@ export async function submitHazardReport(input: HazardReportInput) {
     accuracyMeters: input.accuracyMeters ?? null,
     severity: input.severity,
     barangay: input.barangay || '',
-    userId: input.userId || null,
-    sender_id: input.userId || null,
+    userId: authoritativeUserId,
+    sender_id: authoritativeUserId,
     reporterName: input.reporterName || '',
     reporterPhotoUrl: input.reporterPhotoUrl || '',
     reporter_photo_url: input.reporterPhotoUrl || '',
@@ -403,22 +529,53 @@ export async function submitHazardReport(input: HazardReportInput) {
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     });
-    const batch = writeBatch(db);
-
-    batch.set(reportRef, reportPayload);
-    batch.set(doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, input.userId), {
+    const guardRef = doc(db, REPORT_SUBMISSION_GUARDS_COLLECTION, authoritativeUserId);
+    const guardPayload = {
       lastReportId: reportRef.id,
       lastSubmittedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-      userId: input.userId,
-    }, { merge: true });
+      userId: authoritativeUserId,
+    };
+    const batch = writeBatch(db);
+
+    logReportTrace('committing report batch', {
+      authUid: auth.currentUser?.uid || null,
+      callerUserId: input.userId || null,
+      firebaseTokenExpirationTime: firebaseTokenResult?.expirationTime || null,
+      firebaseTokenIssuedAtTime: firebaseTokenResult?.issuedAtTime || null,
+      reportPath: `${REPORTS_COLLECTION}/${reportRef.id}`,
+      guardPath: `${REPORT_SUBMISSION_GUARDS_COLLECTION}/${authoritativeUserId}`,
+      ruleExpectations: {
+        signedIn: Boolean(auth.currentUser),
+        userMatchesAuth: auth.currentUser?.uid === authoritativeUserId,
+        senderMatchesUser: reportPayload.sender_id === reportPayload.userId,
+        guardLastReportMatchesReport: guardPayload.lastReportId === reportRef.id,
+        insideMarikina: isInsideMarikina(input.latitude, input.longitude),
+      },
+      reportPayload: summarizePayload(reportPayload),
+      guardPayload: summarizePayload(guardPayload),
+    });
+
+    batch.set(reportRef, reportPayload);
+    batch.set(guardRef, guardPayload);
 
     await batch.commit();
-    recentSubmitChecks.set(input.userId, Date.now());
+    recentSubmitChecks.set(authoritativeUserId, Date.now());
+    logReportTrace('report batch committed', {
+      reportPath: `${REPORTS_COLLECTION}/${reportRef.id}`,
+      guardPath: `${REPORT_SUBMISSION_GUARDS_COLLECTION}/${authoritativeUserId}`,
+      authUid: auth.currentUser?.uid || null,
+    });
     return reportRef;
   } catch (error) {
+    logReportTrace('report batch failed', {
+      authUid: auth.currentUser?.uid || null,
+      callerUserId: input.userId || null,
+      code: typeof error === 'object' && error !== null && 'code' in error ? (error as { code?: unknown }).code : null,
+      message: error instanceof Error ? error.message : String(error),
+    });
     if (cloudinaryMedia?.public_id && input.idToken) {
-      deleteCloudinaryMedia(input.idToken, cloudinaryMedia.public_id, mediaResourceType, input.userId).catch(() => undefined);
+      deleteCloudinaryMedia(input.idToken, cloudinaryMedia.public_id, mediaResourceType, authoritativeUserId).catch(() => undefined);
     }
     throw error;
   }
@@ -433,8 +590,7 @@ export function subscribeToHazardReports(
   const { db } = getFirebaseClients();
   const reportsQuery = query(
     collection(db, REPORTS_COLLECTION),
-    orderBy('timestamp', 'desc'),
-    limit(maxReports)
+    ...buildTimeBoundQueryConstraints('timestamp', filters, maxReports)
   );
 
   let lastHash = '';
@@ -486,12 +642,13 @@ export function subscribeToNotifications(
         return normalizeNotification(snapshot, readIds, reportId ? reportsById.get(reportId) ?? null : null);
       })
       .filter((notification) => {
+        if (notification.type === 'official_alert' && notification.shouldNotify === false) return false;
         if (notification.type === 'moderation_removed') return true;
         if (notification.report?.moderationStatus === 'removed' || notification.report?.status === 'rejected') return false;
         if (filters && notification.report) return matchesFilters(notification.report, filters);
         return matchesNotificationFilters(notification, filters);
       })
-      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+      .sort(sortNotifications);
 
     const nextHash = notifications.map((notification) => `${notification.id}:${notification.read}:${notification.source}:${notification.priority}:${notification.report?.id || ''}:${notification.report?.status || ''}:${notification.report?.moderationStatus || ''}`).join('|');
     if (nextHash === lastHash) return;
@@ -502,17 +659,18 @@ export function subscribeToNotifications(
   const publicNotificationsQuery = query(
     collection(db, NOTIFICATIONS_COLLECTION),
     where('audience', '==', 'all'),
-    orderBy('createdAt', 'desc'),
-    limit(maxNotifications)
+    ...buildTimeBoundQueryConstraints('createdAt', filters, maxNotifications)
   );
   const userNotificationsQuery = query(
     collection(db, NOTIFICATIONS_COLLECTION),
     where('recipientId', '==', userId),
-    orderBy('createdAt', 'desc'),
-    limit(maxNotifications)
+    ...buildTimeBoundQueryConstraints('createdAt', filters, maxNotifications)
   );
   const readsQuery = query(collection(db, NOTIFICATION_READS_COLLECTION), where('userId', '==', userId));
-  const reportsQuery = query(collection(db, REPORTS_COLLECTION), orderBy('timestamp', 'desc'), limit(maxNotifications));
+  const reportsQuery = query(
+    collection(db, REPORTS_COLLECTION),
+    ...buildTimeBoundQueryConstraints('timestamp', filters, maxNotifications)
+  );
 
   const unsubscribePublicNotifications = subscribeWithRetry((handleError) => onSnapshot(publicNotificationsQuery, (snapshot) => {
     publicNotificationDocs = snapshot.docs;
@@ -750,4 +908,25 @@ export async function reportCommunityPost(
       ignoreAlreadyExists(error);
     }
   });
+}
+
+export async function deleteHazardReport(reportId: string, userId?: string) {
+  const authoritativeUserId = getAuthoritativeFirebaseUid(userId);
+  const { db } = getFirebaseClients();
+  const reportRef = doc(db, REPORTS_COLLECTION, reportId);
+  const reportSnapshot = await getDocFromServer(reportRef).catch((error) => {
+    if (isFirestoreErrorCode(error, 'unavailable')) return getDoc(reportRef);
+    throw error;
+  });
+
+  if (!reportSnapshot.exists()) {
+    throw new Error('This report has already been deleted.');
+  }
+
+  const ownerId = reportSnapshot.data().userId || reportSnapshot.data().sender_id;
+  if (ownerId !== authoritativeUserId) {
+    throw new Error('You can only delete your own hazard reports.');
+  }
+
+  await deleteDoc(reportRef);
 }

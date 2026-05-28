@@ -3,6 +3,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Badge, useAppTheme } from '@/components/EmergencyUI';
 import type { ReportNotification } from '@/types/hazard';
+import { getSeverityStyle } from '@/utils/severity';
 
 function formatTime(date: Date | null) {
   if (!date) return 'Syncing';
@@ -22,11 +23,11 @@ function NotificationCardComponent({
 }) {
   const theme = useAppTheme();
   const severity = notification.severity || notification.report?.severity || 'Moderate';
+  const severityStyle = getSeverityStyle(theme, severity);
   const hazardType = notification.hazardType || notification.report?.hazardType || 'Hazard';
   const isOfficial = notification.type === 'official_alert' || notification.source === 'official' || notification.source === 'admin';
-  const isHigh = ['High', 'Critical'].includes(String(severity)) || notification.priority === 'high' || notification.priority === 'critical';
-  const color = isOfficial ? theme.danger : String(severity) === 'Moderate' ? theme.warning : isHigh ? theme.danger : theme.primary;
-  const background = isOfficial ? theme.dangerSoft : String(severity) === 'Moderate' ? theme.warningSoft : isHigh ? theme.dangerSoft : theme.primaryTint;
+  const color = severityStyle.color;
+  const background = severityStyle.backgroundColor;
   const imageUrl = notification.imageUrl || notification.report?.imageUrl;
   const capturedAtLabel = notification.capturedAtLabel || notification.report?.capturedAtLabel;
   const sourceLabel = notification.sourceLabel || (isOfficial ? 'OFFICIAL ALERT' : 'COMMUNITY');

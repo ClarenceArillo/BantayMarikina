@@ -6,20 +6,13 @@ import { useAuthSession } from '@/context/auth-context';
 import { useReportEngagement } from '@/hooks/useReportEngagement';
 import type { HazardReport } from '@/types/hazard';
 import { formatReportDateTime } from '@/utils/dateTime';
+import { getSeverityStyle } from '@/utils/severity';
 
 const defaultProfile = require('@/assets/Icons/Default Profile.png');
 const likeIcon = require('@/assets/Icons/Like.png');
 const commentIcon = require('@/assets/Icons/Comment.png');
 const reportIcon = require('@/assets/Icons/Report.png');
 const pinIcon = require('@/assets/Icons/Pin.png');
-
-function severityTone(severity?: string) {
-  const value = severity?.toLowerCase();
-  if (value === 'critical') return 'critical';
-  if (value === 'high') return 'high';
-  if (value === 'moderate') return 'moderate';
-  return 'low';
-}
 
 function hazardGlyph(hazardType?: string) {
   if (hazardType === 'Flood') return '~';
@@ -32,9 +25,9 @@ function ReportCardComponent({ report, onPress }: { report: HazardReport; onPres
   const theme = useAppTheme();
   const { session } = useAuthSession();
   const { engagement } = useReportEngagement(report.id, session?.uid, session?.idToken);
-  const tone = severityTone(report.severity);
-  const toneColor = tone === 'critical' || tone === 'high' ? theme.danger : tone === 'moderate' ? theme.warning : theme.primary;
-  const toneBg = tone === 'critical' || tone === 'high' ? theme.dangerSoft : tone === 'moderate' ? theme.warningSoft : theme.primaryTint;
+  const severityStyle = getSeverityStyle(theme, report.severity);
+  const toneColor = severityStyle.color;
+  const toneBg = severityStyle.backgroundColor;
   const likeCount = Math.max(report.likeCount || 0, engagement.likeCount);
   const commentCount = Math.max(report.commentCount || 0, engagement.commentCount);
   const viewCount = Math.max(report.viewCount || 0, engagement.viewCount);

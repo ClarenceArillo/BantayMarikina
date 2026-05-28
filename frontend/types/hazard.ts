@@ -3,6 +3,10 @@ export const HAZARD_TYPES = [
   'Fire',
   'Landslide',
   'Earthquake Damage',
+  'Earthquake',
+  'Typhoon',
+  'Extreme Heat',
+  'High Water Level',
   'Road Blockage',
   'Power Outage',
   'Others',
@@ -32,6 +36,10 @@ export type HazardReport = {
   status: 'active' | 'pending' | 'resolved' | 'rejected';
   source?: 'official' | 'community';
   moderationStatus?: 'visible' | 'removed';
+  magnitude?: number;
+  intensity?: number;
+  signalLevel?: number;
+  shouldNotify?: boolean;
   likeCount?: number;
   commentCount?: number;
   viewCount?: number;
@@ -70,7 +78,7 @@ export type HazardReportInput = {
   onUploadProgress?: (progress: number) => void;
 };
 
-export const DATE_FILTERS = ['today', 'yesterday', 'week', 'month', 'custom'] as const;
+export const DATE_FILTERS = ['today', 'yesterday', 'week', 'month', 'year', 'custom'] as const;
 export type ReportDateFilter = (typeof DATE_FILTERS)[number];
 
 export type ReportFilters = {
@@ -98,12 +106,18 @@ export type ReportNotification = {
   safetyTip?: string;
   affectedArea?: string;
   priority?: 'normal' | 'high' | 'critical';
+  magnitude?: number;
+  intensity?: number;
+  signalLevel?: number;
+  shouldNotify?: boolean;
   imageUrl?: string;
   capturedAtLabel?: string;
   latitude?: number;
   longitude?: number;
   barangay?: string;
   reporterName?: string;
+  moderationReason?: ReportModerationCategory | string;
+  moderationReasonLabel?: string;
   createdAt: Date | null;
   read: boolean;
   report?: HazardReport | null;

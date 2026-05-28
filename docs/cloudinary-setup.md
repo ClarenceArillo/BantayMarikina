@@ -209,7 +209,7 @@ media[]
 capturedAtLabel
 ```
 
-5. Cloud Functions delete report media when the report is deleted or auto-removed by moderation.
+5. Cloud Functions delete report media when the report is deleted or auto-removed by moderation. Owner-initiated report deletion also removes the report's Firestore engagement subcollections and related notification documents.
 
 ## URL Optimization
 

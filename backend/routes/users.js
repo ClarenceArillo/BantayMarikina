@@ -226,6 +226,19 @@ router.get('/me', requireAuthenticatedUser, async (req, res) => {
 
 router.post('/firebase-token', requireAuthenticatedUser, async (req, res) => {
   try {
+    console.log(JSON.stringify({
+      level: 'info',
+      message: 'Issuing Firebase custom token',
+      route: '/api/users/firebase-token',
+      uid: req.auth.uid,
+      role: req.auth.role || 'resident',
+      authTime: req.auth.auth_time || null,
+      tokenIssuedAt: req.auth.iat || null,
+      tokenExpiresAt: req.auth.exp || null,
+      forwardedFor: req.headers['x-forwarded-for'] || null,
+      origin: req.headers.origin || null,
+      timestamp: new Date().toISOString(),
+    }));
     const customToken = await admin.auth().createCustomToken(req.auth.uid, {
       role: req.auth.role || 'resident',
     });
