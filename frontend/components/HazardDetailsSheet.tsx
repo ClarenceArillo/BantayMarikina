@@ -12,6 +12,7 @@ import {
   toggleReportLike,
 } from '@/services/hazardReportService';
 import type { HazardReport, ReportModerationCategory } from '@/types/hazard';
+import { formatReportDateTime } from '@/utils/dateTime';
 
 const defaultProfile = require('@/assets/Icons/Default Profile.png');
 const likeIcon = require('@/assets/Icons/Like.png');
@@ -19,12 +20,16 @@ const likeActiveIcon = require('@/assets/Icons/Like-Active.png');
 const commentIcon = require('@/assets/Icons/Comment.png');
 const reportIcon = require('@/assets/Icons/Report.png');
 
-function formatDate(report: HazardReport) {
-  if (!report.timestamp) return { date: 'Pending sync', time: '' };
-  return {
-    date: report.timestamp.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
-    time: report.timestamp.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
-  };
+function formatCoordinates(report: HazardReport) {
+  if (!Number.isFinite(report.latitude) || !Number.isFinite(report.longitude)) return 'Waiting for GPS';
+  return `${report.latitude.toFixed(5)}, ${report.longitude.toFixed(5)}`;
+}
+
+function formatVerification(report: HazardReport) {
+  if (report.source === 'official') return 'Official';
+  if (report.moderationStatus === 'removed' || report.status === 'rejected') return 'Removed';
+  if (report.status === 'pending') return 'Pending review';
+  return 'Community report';
 }
 
 export function HazardDetailsSheet({ report, onClose }: { report: HazardReport | null; onClose: () => void }) {
@@ -33,7 +38,7 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
   const [commentText, setCommentText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ReportModerationCategory>('misleading_information');
   const { engagement } = useReportEngagement(report?.id, session?.uid, session?.idToken);
-  const displayTime = report ? formatDate(report) : null;
+  const displayTime = report ? formatReportDateTime(report.timestamp) : null;
 
   useEffect(() => {
     let isMounted = true;
@@ -143,15 +148,15 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
               </View>
               <View style={[styles.metaItem, { backgroundColor: theme.surfaceMuted }]}>
                 <Text style={[styles.metaLabel, { color: theme.muted }]}>Time</Text>
-                <Text style={[styles.metaValue, { color: theme.text }]}>{displayTime?.time || '--'}</Text>
+                <Text style={[styles.metaValue, { color: theme.text }]}>{displayTime?.time}</Text>
               </View>
               <View style={[styles.metaItem, { backgroundColor: theme.surfaceMuted }]}>
                 <Text style={[styles.metaLabel, { color: theme.muted }]}>Coordinates</Text>
-                <Text style={[styles.metaValue, { color: theme.text }]}>{report.latitude.toFixed(5)}, {report.longitude.toFixed(5)}</Text>
+                <Text style={[styles.metaValue, { color: theme.text }]}>{formatCoordinates(report)}</Text>
               </View>
               <View style={[styles.metaItem, { backgroundColor: theme.surfaceMuted }]}>
                 <Text style={[styles.metaLabel, { color: theme.muted }]}>Verification</Text>
-                <Text style={[styles.metaValue, { color: theme.text }]}>{report.source === 'official' ? 'Official' : 'Community verified'}</Text>
+                <Text style={[styles.metaValue, { color: theme.text }]}>{formatVerification(report)}</Text>
               </View>
             </View>
 

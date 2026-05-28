@@ -111,6 +111,20 @@ function toDate(value: unknown) {
   if (!value) return null;
   if (value instanceof Timestamp) return value.toDate();
   if (value instanceof Date) return value;
+  if (typeof value === 'object') {
+    const timestampLike = value as { seconds?: unknown; _seconds?: unknown; nanoseconds?: unknown; _nanoseconds?: unknown; toDate?: unknown };
+    if (typeof timestampLike.toDate === 'function') {
+      const date = timestampLike.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
+    }
+
+    const seconds = typeof timestampLike.seconds === 'number' ? timestampLike.seconds : timestampLike._seconds;
+    const nanoseconds = typeof timestampLike.nanoseconds === 'number' ? timestampLike.nanoseconds : timestampLike._nanoseconds;
+    if (typeof seconds === 'number') {
+      const date = new Date((seconds * 1000) + (typeof nanoseconds === 'number' ? Math.floor(nanoseconds / 1_000_000) : 0));
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+  }
   if (typeof value === 'string' || typeof value === 'number') {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? null : date;
@@ -144,7 +158,7 @@ function normalizeReport(doc: QueryDocumentSnapshot<DocumentData>): HazardReport
     description: data.description || '',
     latitude,
     longitude,
-    timestamp: toDate(data.timestamp || data.createdAt),
+    timestamp: toDate(data.timestamp || data.createdAt || data.created_at || data.updatedAt),
     userId: data.userId || data.sender_id,
     reporterName: data.reporterName,
     severity: data.severity,
@@ -175,7 +189,7 @@ function normalizeComment(doc: QueryDocumentSnapshot<DocumentData>): ReportComme
     userName: data.userName || 'Resident',
     userPhotoUrl: cloudinaryOptimizedUrl(data.userPhotoUrl, 96),
     body: data.body || '',
-    createdAt: toDate(data.createdAt),
+    createdAt: toDate(data.createdAt || data.created_at || data.timestamp),
   };
 }
 

@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Image, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/components/EmergencyUI';
@@ -66,16 +66,23 @@ function MapCapsule({
 }
 
 export default function MapScreen() {
-  const params = useLocalSearchParams<{ evacuation?: string }>();
+  const params = useLocalSearchParams<{ evacuation?: string; reportId?: string }>();
   const { session } = useAuthSession();
   const theme = useAppTheme();
-  const [filters, setFilters] = useState<ReportFilters>({ dateRange: 'month', hazardType: 'All', severity: 'All', status: 'All', source: 'All' });
+  const [filters, setFilters] = useState<ReportFilters>({
+    dateRange: params.reportId ? 'custom' : 'month',
+    hazardType: 'All',
+    severity: 'All',
+    status: 'All',
+    source: 'All',
+  });
   const { reports, isLoading, error } = useHazardReports(session?.idToken, 300, filters);
   const { location, isLocating, error: locationError, locateOnce } = useLiveLocation(true);
   const [selectedReport, setSelectedReport] = useState<HazardReport | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const [isFilterVisible, setIsFilterVisible] = useState(false);
   const [isEvacuationVisible, setIsEvacuationVisible] = useState(() => params.evacuation === '1');
+  const openedReportIdRef = useRef<string | null>(null);
   const {
     sites: evacuationSites,
     isLoading: isLoadingEvacuationSites,
@@ -101,6 +108,32 @@ export default function MapScreen() {
     }
   }, [params.evacuation]);
 
+  useEffect(() => {
+    if (!params.reportId) return;
+
+    setFilters((current) => (
+      current.dateRange === 'custom' &&
+      current.hazardType === 'All' &&
+      current.severity === 'All' &&
+      current.status === 'All' &&
+      current.source === 'All'
+        ? current
+        : { dateRange: 'custom', hazardType: 'All', severity: 'All', status: 'All', source: 'All' }
+    ));
+  }, [params.reportId]);
+
+  useEffect(() => {
+    if (!params.reportId) return;
+    if (openedReportIdRef.current === params.reportId) return;
+
+    const report = reports.find((item) => item.id === params.reportId);
+    if (report) {
+      openedReportIdRef.current = params.reportId;
+      setSelectedReport(report);
+      setFocusSignal((value) => value + 1);
+    }
+  }, [params.reportId, reports]);
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
       <View style={styles.mapShell}>
@@ -116,6 +149,7 @@ export default function MapScreen() {
           initialZoom={13}
           onMarkerPress={setSelectedReport}
           focusSignal={focusSignal}
+          focusReportId={params.reportId}
         />
 
         <View style={[styles.headerBar, { backgroundColor: theme.surface, borderColor: theme.borderSoft, shadowColor: theme.black }]}>

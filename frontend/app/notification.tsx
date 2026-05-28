@@ -88,7 +88,8 @@ export default function NotificationScreen() {
 
   const viewOnMap = useCallback((notification: ReportNotification) => {
     markReadOnce(notification);
-    navigateMainTab('notification', 'map');
+    const reportId = notification.reportId || notification.report?.id;
+    navigateMainTab('notification', 'map', reportId ? { reportId } : undefined);
   }, [markReadOnce]);
 
   const renderItem = useCallback(({ item }: { item: (typeof listItems)[number] }) => {

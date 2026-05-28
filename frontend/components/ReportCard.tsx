@@ -2,18 +2,16 @@ import { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { useAppTheme } from '@/components/EmergencyUI';
+import { useAuthSession } from '@/context/auth-context';
+import { useReportEngagement } from '@/hooks/useReportEngagement';
 import type { HazardReport } from '@/types/hazard';
+import { formatReportDateTime } from '@/utils/dateTime';
 
 const defaultProfile = require('@/assets/Icons/Default Profile.png');
 const likeIcon = require('@/assets/Icons/Like.png');
 const commentIcon = require('@/assets/Icons/Comment.png');
 const reportIcon = require('@/assets/Icons/Report.png');
 const pinIcon = require('@/assets/Icons/Pin.png');
-
-function formatTime(date: Date | null) {
-  if (!date) return 'Syncing';
-  return date.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-}
 
 function severityTone(severity?: string) {
   const value = severity?.toLowerCase();
@@ -32,9 +30,15 @@ function hazardGlyph(hazardType?: string) {
 
 function ReportCardComponent({ report, onPress }: { report: HazardReport; onPress: (report: HazardReport) => void }) {
   const theme = useAppTheme();
+  const { session } = useAuthSession();
+  const { engagement } = useReportEngagement(report.id, session?.uid, session?.idToken);
   const tone = severityTone(report.severity);
   const toneColor = tone === 'critical' || tone === 'high' ? theme.danger : tone === 'moderate' ? theme.warning : theme.primary;
   const toneBg = tone === 'critical' || tone === 'high' ? theme.dangerSoft : tone === 'moderate' ? theme.warningSoft : theme.primaryTint;
+  const likeCount = Math.max(report.likeCount || 0, engagement.likeCount);
+  const commentCount = Math.max(report.commentCount || 0, engagement.commentCount);
+  const viewCount = Math.max(report.viewCount || 0, engagement.viewCount);
+  const userReportCount = Math.max(report.userReportCount || 0, engagement.userReportCount);
 
   return (
     <Pressable style={[styles.card, { backgroundColor: theme.surface, borderColor: theme.borderSoft }]} onPress={() => onPress(report)}>
@@ -44,7 +48,7 @@ function ReportCardComponent({ report, onPress }: { report: HazardReport; onPres
           <View style={styles.titleBlock}>
             <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>{report.reporterName || 'Resident'}</Text>
             <Text style={[styles.meta, { color: theme.muted }]} numberOfLines={1}>
-              {formatTime(report.timestamp)} - {report.source === 'official' ? 'Verified source' : 'Community post'}
+              {formatReportDateTime(report.timestamp).compact} - {report.source === 'official' ? 'Verified source' : 'Community post'}
             </Text>
           </View>
           <View style={[styles.badge, { backgroundColor: toneBg, borderColor: toneColor }]}>
@@ -75,19 +79,19 @@ function ReportCardComponent({ report, onPress }: { report: HazardReport; onPres
         <View style={[styles.metrics, { borderTopColor: theme.borderSoft }]}>
           <View style={styles.metricItem}>
             <Image source={likeIcon} style={[styles.metricIcon, { tintColor: theme.muted }]} resizeMode="contain" />
-            <Text style={[styles.metric, { color: theme.muted }]}>{report.likeCount || 0}</Text>
+            <Text style={[styles.metric, { color: theme.muted }]}>{likeCount}</Text>
           </View>
           <View style={styles.metricItem}>
             <Image source={commentIcon} style={[styles.metricIcon, { tintColor: theme.muted }]} resizeMode="contain" />
-            <Text style={[styles.metric, { color: theme.muted }]}>{report.commentCount || 0}</Text>
+            <Text style={[styles.metric, { color: theme.muted }]}>{commentCount}</Text>
           </View>
           <View style={styles.metricItem}>
             <Text style={[styles.eyeText, { color: theme.muted }]}>Views</Text>
-            <Text style={[styles.metric, { color: theme.muted }]}>{report.viewCount || 0}</Text>
+            <Text style={[styles.metric, { color: theme.muted }]}>{viewCount}</Text>
           </View>
           <View style={styles.metricItem}>
             <Image source={reportIcon} style={[styles.metricIcon, { tintColor: theme.muted }]} resizeMode="contain" />
-            <Text style={[styles.metric, { color: theme.muted }]}>{report.userReportCount || 0}</Text>
+            <Text style={[styles.metric, { color: theme.muted }]}>{userReportCount}</Text>
           </View>
         </View>
       </View>

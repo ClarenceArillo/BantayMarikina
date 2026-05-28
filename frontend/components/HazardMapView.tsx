@@ -38,6 +38,7 @@ type HazardMapViewProps = {
   onMarkerPress?: (report: HazardReport) => void;
   onMapPress?: () => void;
   focusSignal?: number;
+  focusReportId?: string;
 };
 
 type ResolvableImage = typeof Image & {
@@ -368,11 +369,22 @@ function buildMapHtml(pinUri: string, evacuationUri: string, initialZoom: number
       if (isValidPoint(location)) map.flyTo([location.latitude, location.longitude], Math.max(map.getZoom(), 16), { duration: 0.65 });
     }
 
+    function focusReport(reportId) {
+      const marker = markersById[reportId];
+      if (!marker) return;
+
+      cluster.zoomToShowLayer(marker, () => {
+        map.flyTo(marker.getLatLng(), Math.max(map.getZoom(), 16), { duration: 0.65 });
+        marker.openPopup();
+      });
+    }
+
     window.updateHazardMap = function(payload) {
       if (Object.prototype.hasOwnProperty.call(payload, 'reports')) updateReports(payload.reports || []);
       if (Object.prototype.hasOwnProperty.call(payload, 'evacuationSites')) updateEvacuations(payload.evacuationSites || []);
       if (Object.prototype.hasOwnProperty.call(payload, 'userLocation')) updateUserLocation(payload.userLocation);
       if (payload.focusUser) focusUser(payload.userLocation);
+      if (payload.focusReportId) setTimeout(() => focusReport(payload.focusReportId), 80);
     };
 
     map.on('click', () => post({ type: 'mapPress' }));
@@ -398,6 +410,7 @@ function HazardMapViewComponent({
   onMarkerPress,
   onMapPress,
   focusSignal = 0,
+  focusReportId,
 }: HazardMapViewProps) {
   const { colors, isDark } = useTheme();
   const webViewRef = useRef<WebView>(null);
@@ -470,8 +483,9 @@ function HazardMapViewComponent({
       evacuationSites: mapEvacuationSites,
       userLocation: safeUserLocation,
       focusUser: shouldFocusUser,
+      focusReportId,
     });
-  }, [focusSignal, injectMapUpdate, mapEvacuationSites, mapReports, safeUserLocation]);
+  }, [focusReportId, focusSignal, injectMapUpdate, mapEvacuationSites, mapReports, safeUserLocation]);
 
   const handleMessage = useCallback((event: WebViewMessageEvent) => {
     try {
@@ -484,6 +498,7 @@ function HazardMapViewComponent({
             reports: mapReports,
             evacuationSites: mapEvacuationSites,
             userLocation: safeUserLocation,
+            focusReportId,
           }
         );
       }
@@ -499,7 +514,7 @@ function HazardMapViewComponent({
     } catch {
       return;
     }
-  }, [injectMapUpdate, mapEvacuationSites, mapReports, onMapPress, onMarkerPress, safeUserLocation]);
+  }, [focusReportId, injectMapUpdate, mapEvacuationSites, mapReports, onMapPress, onMarkerPress, safeUserLocation]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.mapBackground, height }]}>
