@@ -15,23 +15,23 @@ type BottomNavProps = {
 const iconSources = {
   home: {
     light: { inactive: Icons.home, active: Icons.homeActive },
-    dark: { inactive: Icons.home, active: Icons.homeActive },
+    dark: { inactive: Icons.home, active: Icons.homeDark },
   },
   map: {
     light: { inactive: Icons.map, active: Icons.mapActive },
-    dark: { inactive: Icons.map, active: Icons.mapActive },
+    dark: { inactive: Icons.map, active: Icons.mapDark },
   },
   report: {
-    light: { inactive: Icons.reportInactive, active: Icons.report },
-    dark: { inactive: Icons.reportInactive, active: Icons.report },
+    light: { inactive: Icons.reportInactive, active: Icons.reportInactive },
+    dark: { inactive: Icons.reportInactive, active: Icons.reportInactive },
   },
   notification: {
     light: { inactive: Icons.notification, active: Icons.notificationActive },
-    dark: { inactive: Icons.notification, active: Icons.notificationActive },
+    dark: { inactive: Icons.notification, active: Icons.notificationDark },
   },
   profile: {
     light: { inactive: Icons.profile, active: Icons.profileActive },
-    dark: { inactive: Icons.profile, active: Icons.profileActive },
+    dark: { inactive: Icons.profile, active: Icons.profileDark },
   },
 };
 

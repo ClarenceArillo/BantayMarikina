@@ -50,6 +50,7 @@ function severityColor(severity?: string) {
   if (normalized === 'critical') return '#a6192e';
   if (normalized === 'high') return '#d64545';
   if (normalized === 'moderate') return '#f2a93b';
+  if (normalized === 'low') return '#f2c94c';
   return DEFAULT_PIN_COLOR;
 }
 
@@ -117,15 +118,12 @@ function buildMapHtml(pinUri: string, evacuationUri: string, initialZoom: number
     .hazard-preview-body { font-size: 11px; line-height: 1.35; margin-top: 6px; }
     .hazard-pin { filter: drop-shadow(0 5px 7px rgba(0,0,0,.28)); }
     .hazard-pin-wrap { align-items: center; display: flex; justify-content: center; position: relative; }
-    .hazard-pin-wrap::after {
-      border: 3px solid #fff;
-      border-radius: 50%;
-      content: '';
-      height: 12px;
-      left: 18px;
+    .hazard-pin-icon {
+      height: 22px;
+      left: 10px;
       position: absolute;
       top: 8px;
-      width: 12px;
+      width: 22px;
     }
     .evacuation-pin-wrap {
       filter: drop-shadow(0 10px 14px rgba(201,53,53,.34));
@@ -224,14 +222,48 @@ function buildMapHtml(pinUri: string, evacuationUri: string, initialZoom: number
         .replace(/'/g, '&#39;');
     }
 
+    function hazardSymbolHtml(hazardType) {
+      const type = String(hazardType || '').toLowerCase();
+      const attrs = 'class="hazard-pin-icon" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"';
+
+      if (type === 'flood') {
+        return '<svg ' + attrs + '><path d="M3 8c2.2 0 2.2 1.4 4.4 1.4S9.6 8 11.8 8s2.2 1.4 4.4 1.4S18.4 8 21 8"/><path d="M3 13c2.2 0 2.2 1.4 4.4 1.4s2.2-1.4 4.4-1.4 2.2 1.4 4.4 1.4S18.4 13 21 13"/><path d="M3 18c2.2 0 2.2 1.4 4.4 1.4s2.2-1.4 4.4-1.4 2.2 1.4 4.4 1.4S18.4 18 21 18"/></svg>';
+      }
+
+      if (type === 'fire') {
+        return '<svg ' + attrs + '><path d="M12 22c4 0 7-2.7 7-6.6 0-2.7-1.4-4.6-3.2-6.3-.8 2-2.3 2.8-3.8 3.3.9-3.4-.7-6.4-3.2-8.4.2 3.7-3.8 5.8-3.8 10.7C5 19 8 22 12 22Z"/><path d="M12 22c1.9 0 3.3-1.3 3.3-3 0-1.3-.7-2.2-1.8-3.2-.4 1.1-1.1 1.7-2 2 .4-1.9-.4-3.3-1.7-4.4.1 2-1.8 3.2-1.8 5.5 0 1.8 1.4 3.1 4 3.1Z"/></svg>';
+      }
+
+      if (type === 'landslide') {
+        return '<svg ' + attrs + '><path d="M3 20h18"/><path d="M5 20 14 5l7 15"/><path d="m8 15 3 2 3-2 3 2"/><circle cx="9" cy="7" r="1.5"/><circle cx="13" cy="11" r="1.5"/></svg>';
+      }
+
+      if (type === 'earthquake damage') {
+        return '<svg ' + attrs + '><path d="M4 21h16"/><path d="M7 21V6h10v15"/><path d="m12 6-2 5h4l-2 5"/><path d="M9 10H7"/><path d="M17 14h-2"/></svg>';
+      }
+
+      if (type === 'road blockage') {
+        return '<svg ' + attrs + '><path d="M4 20 11 4"/><path d="m13 4 7 16"/><path d="M7 14h10"/><path d="m9 10 6 4"/><path d="m15 10-6 4"/></svg>';
+      }
+
+      if (type === 'power outage') {
+        return '<svg ' + attrs + '><path d="M13 2 5 14h7l-1 8 8-12h-7l1-8Z"/></svg>';
+      }
+
+      return '<svg ' + attrs + '><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 4.3 2.8 17.2A2 2 0 0 0 4.5 20h15a2 2 0 0 0 1.7-2.8L13.7 4.3a2 2 0 0 0-3.4 0Z"/></svg>';
+    }
+
     function markerIcon(report) {
       const color = report.color || '${DEFAULT_PIN_COLOR}';
       return L.divIcon({
         className: 'hazard-pin-host',
-        html: '<div class="hazard-pin-wrap" style="--hazard-color:' + escapeHtml(color) + '"><img class="hazard-pin" src="' + escapeHtml(pinUri) + '" style="width:36px;height:36px;object-fit:contain;" onerror="this.style.display=\\'none\\';this.parentNode.style.width=\\'28px\\';this.parentNode.style.height=\\'28px\\';this.parentNode.style.borderRadius=\\'50%\\';this.parentNode.style.background=\\'' + escapeHtml(color) + '\\';"></div>',
-        iconSize: [36, 36],
-        iconAnchor: [18, 34],
-        popupAnchor: [0, -32]
+        html: '<div class="hazard-pin-wrap" style="position:relative;width:42px;height:50px;">' +
+          '<svg viewBox="0 0 42 50" style="width:42px;height:50px;"><path d="M21 0 C9.4 0 0 9.4 0 21 C0 36.75 21 50 21 50 C21 50 42 36.75 42 21 C42 9.4 32.6 0 21 0Z" fill="' + escapeHtml(color) + '"/></svg>' +
+          hazardSymbolHtml(report.hazardType) +
+          '</div>',
+        iconSize: [42, 50],
+        iconAnchor: [21, 50],
+        popupAnchor: [0, -50]
       });
     }
 
