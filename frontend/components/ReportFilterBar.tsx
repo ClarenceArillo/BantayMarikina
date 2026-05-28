@@ -9,6 +9,7 @@ const DATE_OPTIONS: { label: string; value: ReportDateFilter }[] = [
   { label: 'Yesterday', value: 'yesterday' },
   { label: 'This Week', value: 'week' },
   { label: 'This Month', value: 'month' },
+  { label: 'This Year', value: 'year' },
 ];
 
 type ReportFilterBarProps = {

@@ -14,9 +14,60 @@ function slugify(value) {
     .slice(0, 80);
 }
 
+function toDate(value) {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (value instanceof admin.firestore.Timestamp) return value.toDate();
+  if (value && typeof value.toDate === 'function') {
+    try {
+      const date = value.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime()) ? date : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function getSignalLevel(severity, hazardType) {
+  if (hazardType === 'Typhoon') {
+    if (severity === 'Critical') return 5;
+    if (severity === 'High') return 4;
+    if (severity === 'Moderate') return 2;
+    return 1;
+  }
+
+  if (hazardType === 'Earthquake') {
+    if (severity === 'Critical') return 5;
+    if (severity === 'High') return 4;
+    if (severity === 'Moderate') return 3;
+    return 1;
+  }
+
+  if (severity === 'Critical') return 5;
+  if (severity === 'High') return 4;
+  if (severity === 'Moderate') return 3;
+  return 1;
+}
+
+function shouldNotifyOfficialAlert({ hazardType, severity, magnitude, signalLevel }) {
+  if (hazardType === 'Earthquake') {
+    return Number.isFinite(Number(magnitude)) && Number(magnitude) >= 4;
+  }
+
+  if (hazardType === 'Typhoon') {
+    return Number.isFinite(Number(signalLevel)) && Number(signalLevel) >= 2;
+  }
+
+  return ['High', 'Critical'].includes(severity);
+}
+
 function normalizeOfficialAlert(input = {}) {
   const hazardType = OFFICIAL_ALERT_TYPES.has(input.hazardType) ? input.hazardType : 'High Water Level';
   const severity = SEVERITIES.has(input.severity) ? input.severity : 'High';
+  const magnitude = Number.isFinite(Number(input.magnitude)) ? Number(input.magnitude) : null;
+  const intensity = Number.isFinite(Number(input.intensity)) ? Number(input.intensity) : null;
+  const signalLevel = Number.isFinite(Number(input.signalLevel)) ? Number(input.signalLevel) : getSignalLevel(severity, hazardType);
+  const shouldNotify = typeof input.shouldNotify === 'boolean' ? input.shouldNotify : shouldNotifyOfficialAlert({ hazardType, severity, magnitude, signalLevel });
   const title = sanitizeText(input.title || `${hazardType} Alert in Marikina`, 120);
   const body = sanitizeText(input.body || input.description || '', 500);
   const safetyTip = sanitizeText(input.safetyTip || '', 240);
@@ -39,7 +90,7 @@ function normalizeOfficialAlert(input = {}) {
     type: 'official_alert',
     source: 'official',
     sourceLabel: sanitizeText(input.sourceLabel || 'OFFICIAL ALERT', 40),
-    priority: severity === 'Critical' ? 'critical' : 'high',
+    priority: severity === 'Critical' ? 'critical' : severity === 'High' ? 'high' : 'normal',
     hazardType,
     severity,
     title,
@@ -47,6 +98,10 @@ function normalizeOfficialAlert(input = {}) {
     safetyTip,
     affectedArea,
     barangay: affectedArea,
+    magnitude,
+    intensity,
+    signalLevel,
+    shouldNotify,
     latitude: Number.isFinite(Number(input.latitude)) ? Number(input.latitude) : null,
     longitude: Number.isFinite(Number(input.longitude)) ? Number(input.longitude) : null,
     createdBy: input.createdBy || 'system',
@@ -96,6 +151,26 @@ async function deleteOlderOfficialAlerts(officialAlertKey, currentDocId) {
   if (deleteCount > 0) await batch.commit();
 }
 
+async function pruneOlderOfficialAlerts() {
+  const currentYearStart = new Date(new Date().getFullYear(), 0, 1);
+  const snapshot = await db.collection(NOTIFICATIONS_COLLECTION)
+    .where('type', '==', 'official_alert')
+    .get();
+  const batch = db.batch();
+  let deleteCount = 0;
+
+  snapshot.docs.forEach((document) => {
+    const data = document.data();
+    const documentDate = toDate(data.issuedAt) || toDate(data.createdAt);
+    if (documentDate && documentDate < currentYearStart) {
+      batch.delete(document.ref);
+      deleteCount += 1;
+    }
+  });
+
+  if (deleteCount > 0) await batch.commit();
+}
+
 async function upsertLatestOfficialHazardAlert(input = {}) {
   const alert = normalizeOfficialAlert(input);
   const eventId = alert.officialEventId || input.dedupeKey || alert.providerReference || `${alert.hazardType}-${alert.affectedArea}`;
@@ -103,7 +178,7 @@ async function upsertLatestOfficialHazardAlert(input = {}) {
   const docRef = db.collection(NOTIFICATIONS_COLLECTION).doc(docId);
 
   await docRef.set(alert, { merge: true });
-  await deleteOlderOfficialAlerts(alert.officialAlertKey, docId);
+  await pruneOlderOfficialAlerts();
   return { id: docId, ...alert };
 }
 

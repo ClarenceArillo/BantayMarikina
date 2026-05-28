@@ -248,7 +248,7 @@ The Report screen allows residents to submit a hazard. It:
 
 Notifications are grouped by date buckets and filtered by:
 
-- Date range.
+- Date range, including a current-year window for annual alert review.
 - Hazard type.
 - Severity.
 - Status.
@@ -569,9 +569,11 @@ This avoids mutating shared notification documents and scales better when many u
 - Public notifications where `audience == "all"`.
 - User notifications where `recipientId == userId`.
 - `NotificationReads` for the current user.
-- Recent reports to enrich notification cards with current report status.
+- Reports in the selected date window to enrich notification cards with current report status.
 
-It merges, deduplicates, filters, sorts, and emits the final notification list.
+It merges, deduplicates, filters, sorts, and emits the final notification list. When users select **This Year**, Firestore queries are bounded from January 1 of the current year onward so annual community and official alert history can be reviewed instead of only the newest page of notifications.
+
+Official alerts are intentionally filtered so only actionable records surface to users: `official_alert` documents with `shouldNotify === false` are suppressed. The client sorts the remaining notifications by stored severity, magnitude, and intensity so highest-priority alerts rise first.
 
 ### FCM Integration
 
@@ -611,7 +613,11 @@ Official alert documents are deterministic:
 official_{officialAlertKey}_{officialEventId}
 ```
 
-For latest alert streams, old documents with the same `officialAlertKey` are deleted so the notification list does not accumulate duplicate "latest" alerts from the same source.
+For latest alert streams, each source event uses a deterministic document id so duplicate polls update the same notification while separate events remain available for annual review. The backend also prunes official alerts older than the current year, keeping the active Firestore history aligned to the current annual period.
+
+Each official alert stores normalized `severity`, `signalLevel`, `magnitude`, `intensity`, and `shouldNotify` metadata so the UI can render the correct urgency and hide non-actionable advisories.
+
+PAGASA typhoon alerts are skipped when no active cyclone feed record is available, and active alerts include the local Marikina Tropical Cyclone Wind Signal level inside the alert body. PHIVOLCS earthquake alerts include magnitude/intensity context for Marikina monitoring.
 
 ### Manual Official Alerts
 

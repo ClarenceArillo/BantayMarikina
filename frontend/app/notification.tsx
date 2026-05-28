@@ -22,11 +22,13 @@ function dateBucket(date: Date | null) {
   const startWeek = new Date(startToday);
   startWeek.setDate(startToday.getDate() - ((startToday.getDay() || 7) - 1));
   const startMonth = new Date(startToday.getFullYear(), startToday.getMonth(), 1);
+  const startYear = new Date(startToday.getFullYear(), 0, 1);
 
   if (date >= startToday) return 'Today';
   if (date >= startYesterday) return 'Yesterday';
   if (date >= startWeek) return 'Earlier This Week';
   if (date >= startMonth) return 'Earlier This Month';
+  if (date >= startYear) return 'Earlier This Year';
   return 'Older';
 }
 

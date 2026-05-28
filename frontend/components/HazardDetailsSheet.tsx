@@ -13,6 +13,7 @@ import {
 } from '@/services/hazardReportService';
 import type { HazardReport, ReportModerationCategory } from '@/types/hazard';
 import { formatReportDateTime } from '@/utils/dateTime';
+import { getSeverityStyle } from '@/utils/severity';
 
 const defaultProfile = require('@/assets/Icons/Default Profile.png');
 const likeIcon = require('@/assets/Icons/Like.png');
@@ -39,6 +40,7 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
   const [selectedCategory, setSelectedCategory] = useState<ReportModerationCategory>('misleading_information');
   const { engagement } = useReportEngagement(report?.id, session?.uid, session?.idToken);
   const displayTime = report ? formatReportDateTime(report.timestamp) : null;
+  const severityStyle = report ? getSeverityStyle(theme, report.severity) : null;
 
   useEffect(() => {
     let isMounted = true;
@@ -110,8 +112,8 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
                 <Text style={[styles.type, { color: theme.text }]}>{report.reporterName || 'Resident'}</Text>
                 <Text style={[styles.location, { color: theme.muted }]}>{report.hazardType} - {report.barangay || 'Marikina City'} - {report.source || 'community'}</Text>
               </View>
-              <View style={[styles.severityBadge, { backgroundColor: theme.warningSoft, borderColor: theme.warning }]}>
-                <Text style={[styles.severityText, { color: theme.warning }]}>{report.severity || 'Unverified'}</Text>
+              <View style={[styles.severityBadge, { backgroundColor: severityStyle?.backgroundColor, borderColor: severityStyle?.borderColor }]}>
+                <Text style={[styles.severityText, { color: severityStyle?.color }]}>{report.severity || 'Unverified'}</Text>
               </View>
             </View>
 
