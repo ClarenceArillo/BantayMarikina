@@ -4,6 +4,7 @@ import { Alert, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput
 import { useAppTheme } from '@/components/EmergencyUI';
 import { useAuthSession } from '@/context/auth-context';
 import { useReportEngagement } from '@/hooks/useReportEngagement';
+import { ensureFirebaseSession } from '@/services/firebaseSession';
 import {
   addReportComment,
   recordReportView,
@@ -31,28 +32,45 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
   const { session } = useAuthSession();
   const [commentText, setCommentText] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ReportModerationCategory>('misleading_information');
-  const { engagement } = useReportEngagement(report?.id, session?.uid);
+  const { engagement } = useReportEngagement(report?.id, session?.uid, session?.idToken);
   const displayTime = report ? formatDate(report) : null;
 
   useEffect(() => {
-    if (report?.id && session?.uid) {
-      recordReportView(report.id, session.uid).catch(() => undefined);
+    let isMounted = true;
+
+    if (report?.id && session?.uid && session?.idToken) {
+      const reportId = report.id;
+
+      ensureFirebaseSession(session.idToken)
+        .then((firebaseUid) => {
+          if (!isMounted) return;
+          return recordReportView(reportId, firebaseUid);
+        })
+        .catch(() => undefined);
     }
-  }, [report?.id, session?.uid]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [report?.id, session?.idToken, session?.uid]);
 
   async function handleLike() {
-    if (!report?.id || !session?.uid) return;
-    await toggleReportLike(report.id, session.uid).catch((error) => {
+    if (!report?.id || !session?.uid || !session?.idToken) return;
+    try {
+      const firebaseUid = await ensureFirebaseSession(session.idToken);
+      await toggleReportLike(report.id, firebaseUid);
+    } catch (error) {
       Alert.alert('Unable to update like', error instanceof Error ? error.message : 'Please try again.');
-    });
+    }
   }
 
   async function handleComment() {
-    if (!report?.id || !session?.uid) return;
+    if (!report?.id || !session?.uid || !session?.idToken) return;
     try {
+      const firebaseUid = await ensureFirebaseSession(session.idToken);
       await addReportComment(
         report.id,
-        session.uid,
+        firebaseUid,
         session.full_name || session.username || 'Resident',
         commentText,
         session.profile?.profilePhotoUrl || session.profile?.profile_photo_url || session.profile?.photoURL || ''
@@ -64,9 +82,10 @@ export function HazardDetailsSheet({ report, onClose }: { report: HazardReport |
   }
 
   async function handleReportPost() {
-    if (!report?.id || !session?.uid) return;
+    if (!report?.id || !session?.uid || !session?.idToken) return;
     try {
-      await reportCommunityPost(report.id, session.uid, selectedCategory);
+      const firebaseUid = await ensureFirebaseSession(session.idToken);
+      await reportCommunityPost(report.id, firebaseUid, selectedCategory);
       Alert.alert('Report received', 'Thank you. Community moderation will review this post automatically.');
     } catch (error) {
       Alert.alert('Unable to report post', error instanceof Error ? error.message : 'Please try again.');

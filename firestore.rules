@@ -126,8 +126,9 @@ service cloud.firestore {
 
     function canSubmitReport(reportId) {
       let userId = request.resource.data.userId;
-      let beforeGuard = get(reportGuardPath(userId));
-      let afterGuard = getAfter(reportGuardPath(userId));
+      let guardPath = reportGuardPath(userId);
+      let beforeGuard = get(guardPath);
+      let afterGuard = getAfter(guardPath);
       return isOwner(userId)
         && request.resource.data.sender_id == userId
         && afterGuard.data.userId == userId
@@ -135,22 +136,23 @@ service cloud.firestore {
         && validTimestamp(afterGuard.data.lastSubmittedAt)
         && validTimestamp(afterGuard.data.updatedAt)
         && (
-          !beforeGuard.exists()
+          !exists(guardPath)
           || request.time > beforeGuard.data.lastSubmittedAt + duration.value(60, 's')
         );
     }
 
     function canSubmitComment(reportId, commentId) {
       let userId = request.resource.data.userId;
-      let beforeGuard = get(commentGuardPath(userId));
-      let afterGuard = getAfter(commentGuardPath(userId));
+      let guardPath = commentGuardPath(userId);
+      let beforeGuard = get(guardPath);
+      let afterGuard = getAfter(guardPath);
       return afterGuard.data.userId == userId
         && afterGuard.data.reportId == reportId
         && afterGuard.data.lastCommentId == commentId
         && validTimestamp(afterGuard.data.lastSubmittedAt)
         && validTimestamp(afterGuard.data.updatedAt)
         && (
-          !beforeGuard.exists()
+          !exists(guardPath)
           || request.time > beforeGuard.data.lastSubmittedAt + duration.value(20, 's')
         );
     }
@@ -200,7 +202,7 @@ service cloud.firestore {
       }
 
       match /userViews/{userId} {
-        allow read: if signedIn() && request.auth.uid == userId;
+        allow read: if signedIn();
         allow create: if isOwner(userId)
           && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
           && request.resource.data.userId == userId

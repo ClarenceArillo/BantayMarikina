@@ -1,8 +1,10 @@
 import {
   Timestamp,
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocFromServer,
   limit,
   onSnapshot,
   orderBy,
@@ -44,6 +46,42 @@ const MARIKINA_BOUNDS = {
 };
 const RECENT_REPORT_COOLDOWN_MS = 60_000;
 const recentSubmitChecks = new Map<string, number>();
+const engagementWriteLocks = new Map<string, Promise<void>>();
+
+function isFirestoreErrorCode(error: unknown, code: string) {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: unknown }).code === code;
+}
+
+function ignoreAlreadyExists(error: unknown) {
+  if (!isFirestoreErrorCode(error, 'already-exists')) throw error;
+}
+
+function runLockedEngagementWrite(key: string, write: () => Promise<void>) {
+  const activeWrite = engagementWriteLocks.get(key);
+  if (activeWrite) return activeWrite;
+
+  const nextWrite = write().finally(() => {
+    if (engagementWriteLocks.get(key) === nextWrite) {
+      engagementWriteLocks.delete(key);
+    }
+  });
+  engagementWriteLocks.set(key, nextWrite);
+  return nextWrite;
+}
+
+function getCurrentFirebaseUid(fallbackUserId?: string) {
+  const { auth } = getFirebaseClients();
+  const firebaseUid = auth.currentUser?.uid || fallbackUserId;
+
+  if (!firebaseUid) {
+    throw new Error('Please sign in before using post engagement.');
+  }
+
+  return firebaseUid;
+}
 
 function sanitizeText(value: string, maxLength: number) {
   return value
@@ -513,14 +551,16 @@ export function subscribeToReportEngagement(
   const { db } = getFirebaseClients();
   let reportData: DocumentData | undefined;
   let comments: ReportComment[] = [];
+  let liveLikeCount: number | null = null;
+  let liveViewCount: number | null = null;
   let likedByMe = false;
   let reportedByMe = false;
 
   const emit = () => {
     onEngagement({
-      likeCount: reportData?.likeCount || 0,
+      likeCount: liveLikeCount ?? reportData?.likeCount ?? 0,
       commentCount: reportData?.commentCount || comments.length,
-      viewCount: reportData?.viewCount || 0,
+      viewCount: liveViewCount ?? reportData?.viewCount ?? 0,
       userReportCount: reportData?.userReportCount || 0,
       likedByMe,
       reportedByMe,
@@ -533,11 +573,11 @@ export function subscribeToReportEngagement(
     const nextHash = JSON.stringify({
       commentIds: comments.map((comment) => `${comment.id}:${comment.createdAt?.getTime() || 0}`).join('|'),
       commentCount: reportData?.commentCount || comments.length,
-      likeCount: reportData?.likeCount || 0,
+      likeCount: liveLikeCount ?? reportData?.likeCount ?? 0,
       likedByMe,
       reportedByMe,
       userReportCount: reportData?.userReportCount || 0,
-      viewCount: reportData?.viewCount || 0,
+      viewCount: liveViewCount ?? reportData?.viewCount ?? 0,
     });
     if (nextHash === lastHash) return;
     lastHash = nextHash;
@@ -563,11 +603,18 @@ export function subscribeToReportEngagement(
 
   const unsubscribers = [unsubscribeReport, unsubscribeComments];
 
+  unsubscribers.push(subscribeWithRetry((handleError) => onSnapshot(collection(db, REPORTS_COLLECTION, reportId, 'likes'), (snapshot) => {
+    liveLikeCount = snapshot.size;
+    likedByMe = userId ? snapshot.docs.some((likeDoc) => likeDoc.id === userId) : false;
+    emitIfChanged();
+  }, handleError), onError));
+
+  unsubscribers.push(subscribeWithRetry((handleError) => onSnapshot(collection(db, REPORTS_COLLECTION, reportId, 'userViews'), (snapshot) => {
+    liveViewCount = snapshot.size;
+    emitIfChanged();
+  }, handleError), onError));
+
   if (userId) {
-    unsubscribers.push(subscribeWithRetry((handleError) => onSnapshot(doc(db, REPORTS_COLLECTION, reportId, 'likes', userId), (snapshot) => {
-      likedByMe = snapshot.exists();
-      emitIfChanged();
-    }, handleError), onError));
     unsubscribers.push(subscribeWithRetry((handleError) => onSnapshot(doc(db, REPORTS_COLLECTION, reportId, 'userReports', userId), (snapshot) => {
       reportedByMe = snapshot.exists();
       emitIfChanged();
@@ -578,35 +625,57 @@ export function subscribeToReportEngagement(
 }
 
 export async function recordReportView(reportId: string, userId?: string) {
-  if (!userId) return;
+  const engagementUserId = getCurrentFirebaseUid(userId);
 
   const { db } = getFirebaseClients();
-  const viewRef = doc(db, REPORTS_COLLECTION, reportId, 'userViews', userId);
+  const viewRef = doc(db, REPORTS_COLLECTION, reportId, 'userViews', engagementUserId);
 
-  await runTransaction(db, async (transaction) => {
-    const viewSnapshot = await transaction.get(viewRef);
-    if (viewSnapshot.exists()) return;
+  await runLockedEngagementWrite(`view:${reportId}:${engagementUserId}`, async () => {
+    try {
+      await runTransaction(db, async (transaction) => {
+        const viewSnapshot = await transaction.get(viewRef);
+        if (viewSnapshot.exists()) return;
 
-    transaction.set(viewRef, {
-      userId,
-      createdAt: serverTimestamp(),
-    });
+        transaction.set(viewRef, {
+          userId: engagementUserId,
+          createdAt: serverTimestamp(),
+        });
+      });
+    } catch (error) {
+      ignoreAlreadyExists(error);
+    }
   });
 }
 
 export async function toggleReportLike(reportId: string, userId: string) {
+  const engagementUserId = getCurrentFirebaseUid(userId);
   const { db } = getFirebaseClients();
-  const likeRef = doc(db, REPORTS_COLLECTION, reportId, 'likes', userId);
+  const likeRef = doc(db, REPORTS_COLLECTION, reportId, 'likes', engagementUserId);
 
-  await runTransaction(db, async (transaction) => {
-    const likeSnapshot = await transaction.get(likeRef);
+  await runLockedEngagementWrite(`like:${reportId}:${engagementUserId}`, async () => {
+    const likeSnapshot = await getDocFromServer(likeRef).catch((error) => {
+      if (isFirestoreErrorCode(error, 'unavailable')) return getDoc(likeRef);
+      throw error;
+    });
 
     if (likeSnapshot.exists()) {
-      transaction.delete(likeRef);
+      await deleteDoc(likeRef);
       return;
     }
 
-    transaction.set(likeRef, { userId, createdAt: serverTimestamp() });
+    try {
+      await runTransaction(db, async (transaction) => {
+        const transactionSnapshot = await transaction.get(likeRef);
+        if (transactionSnapshot.exists()) {
+          transaction.delete(likeRef);
+          return;
+        }
+
+        transaction.set(likeRef, { userId: engagementUserId, createdAt: serverTimestamp() });
+      });
+    } catch (error) {
+      ignoreAlreadyExists(error);
+    }
   });
 }
 
@@ -615,24 +684,25 @@ export async function addReportComment(reportId: string, userId: string, userNam
   if (cleanBody.length < 2) throw new Error('Please add a longer comment.');
   if (cleanBody.length > 400) throw new Error('Comments are limited to 400 characters.');
 
+  const engagementUserId = getCurrentFirebaseUid(userId);
   const { db } = getFirebaseClients();
   const commentRef = doc(collection(db, REPORTS_COLLECTION, reportId, 'comments'));
   const batch = writeBatch(db);
 
   batch.set(commentRef, {
-    userId,
+    userId: engagementUserId,
     userName: sanitizeText(userName || 'Resident', 60) || 'Resident',
     userPhotoUrl,
     body: cleanBody,
     createdAt: serverTimestamp(),
   });
-  batch.set(doc(db, COMMENT_SUBMISSION_GUARDS_COLLECTION, userId), {
+  batch.set(doc(db, COMMENT_SUBMISSION_GUARDS_COLLECTION, engagementUserId), {
     lastCommentId: commentRef.id,
     lastSubmittedAt: serverTimestamp(),
     reportId,
     updatedAt: serverTimestamp(),
-    userId,
-  }, { merge: true });
+    userId: engagementUserId,
+  });
 
   await batch.commit();
 }
@@ -643,20 +713,27 @@ export async function reportCommunityPost(
   category: ReportModerationCategory,
   note = ''
 ) {
+  const engagementUserId = getCurrentFirebaseUid(userId);
   const { db } = getFirebaseClients();
-  const userReportRef = doc(db, REPORTS_COLLECTION, reportId, 'userReports', userId);
+  const userReportRef = doc(db, REPORTS_COLLECTION, reportId, 'userReports', engagementUserId);
   const cleanNote = sanitizeText(note, 240);
 
-  await runTransaction(db, async (transaction) => {
-    const userReportSnapshot = await transaction.get(userReportRef);
+  await runLockedEngagementWrite(`report:${reportId}:${engagementUserId}`, async () => {
+    try {
+      await runTransaction(db, async (transaction) => {
+        const userReportSnapshot = await transaction.get(userReportRef);
 
-    if (userReportSnapshot.exists()) return;
+        if (userReportSnapshot.exists()) return;
 
-    transaction.set(userReportRef, {
-      userId,
-      category,
-      note: cleanNote,
-      createdAt: serverTimestamp(),
-    });
+        transaction.set(userReportRef, {
+          userId: engagementUserId,
+          category,
+          note: cleanNote,
+          createdAt: serverTimestamp(),
+        });
+      });
+    } catch (error) {
+      ignoreAlreadyExists(error);
+    }
   });
 }
